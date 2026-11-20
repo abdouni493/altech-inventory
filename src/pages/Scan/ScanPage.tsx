@@ -21,7 +21,7 @@ interface Entry {
   key: string
   barcode: string
   label: string
-  price?: number
+  stock?: number
   found: boolean
 }
 
@@ -70,7 +70,7 @@ export const ScanPage = () => {
               key,
               barcode,
               label: res.product?.name ?? 'Produit introuvable',
-              price: res.product?.salePrice,
+              stock: res.product?.quantity,
               found: res.found,
             },
             ...prev,
@@ -221,9 +221,9 @@ export const ScanPage = () => {
                           <p className="truncate text-sm font-medium">{e.label}</p>
                           <p className="text-mono text-[11px] text-white/60">{e.barcode}</p>
                         </div>
-                        {e.price !== undefined && (
+                        {e.stock !== undefined && (
                           <span className="text-mono shrink-0 text-sm font-bold text-gold-light">
-                            {formatMoney(e.price)}
+                            {e.stock} en stock
                           </span>
                         )}
                       </motion.div>

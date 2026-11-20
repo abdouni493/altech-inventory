@@ -158,7 +158,7 @@ export function createApi({ dataDir, lanDatabase = process.env.ALTECH_LAN_DB ===
             ok: true,
             found: !!product,
             product: product
-              ? { id: product.id, name: product.name, salePrice: product.salePrice ?? 0, quantity: product.quantity ?? 0 }
+              ? { id: product.id, name: product.name, quantity: product.quantity ?? 0 }
               : null,
           })
         }

@@ -104,17 +104,15 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
         barcode: p.barcode,
         quantity: 1,
         purchasePrice: p.purchasePrice,
-        salePrice: p.salePrice,
         minQuantity: p.minQuantity,
         hasExpiration: p.hasExpiration ?? false,
         expirationDate: (p.expirationDate ?? '').slice(0, 10),
-        // Retail settings travel with the line so the buyer can adjust the
-        // portion and its price for this delivery.
+        // Detail settings travel with the line so the buyer can adjust them
+        // for this delivery.
         isDivisible: p.isDivisible ?? false,
         unit: p.unit || unitOptions[0] || 'ml',
         capacity: p.capacity ?? 0,
         retailStep: p.retailStep ?? 0,
-        retailPrice: p.retailPrice ?? 0,
       },
     ])
     setProductQuery('')
@@ -170,7 +168,6 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
       cleanLines.forEach((l) =>
         receiveStock(l.productId, l.quantity, {
           purchasePrice: l.purchasePrice,
-          salePrice: l.salePrice,
           minQuantity: l.minQuantity,
           hasExpiration: l.hasExpiration,
           expirationDate: l.hasExpiration ? l.expirationDate : undefined,
@@ -178,7 +175,6 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
           unit: l.unit,
           capacity: l.capacity,
           retailStep: l.retailStep,
-          retailPrice: l.retailPrice,
         }),
       )
       toast.success(t('saved'))
@@ -258,15 +254,12 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
                       <p className="font-semibold text-wood-dark">{l.productName}</p>
                       <button onClick={() => removeLine(l._key)} className="rounded-lg p-1 text-terracotta hover:bg-terracotta/10"><Trash2 size={16} /></button>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <label className="text-xs text-wood-medium">{t('qtyBought')}
                         <input type="number" min={1} value={l.quantity} onChange={(e) => updateLine(l._key, { quantity: Math.max(1, Number(e.target.value)) })} className="input-wood mt-0.5 py-1.5" />
                       </label>
                       <label className="text-xs text-wood-medium">{t('purchasePrice')}
                         <input type="number" step="0.01" value={l.purchasePrice} onChange={(e) => updateLine(l._key, { purchasePrice: Number(e.target.value) })} className="input-wood mt-0.5 py-1.5" />
-                      </label>
-                      <label className="text-xs text-wood-medium">{t('salePrice')}
-                        <input type="number" step="0.01" value={l.salePrice} onChange={(e) => updateLine(l._key, { salePrice: Number(e.target.value) })} className="input-wood mt-0.5 py-1.5" />
                       </label>
                       <label className="text-xs text-wood-medium">{t('minQuantity')}
                         <input type="number" value={l.minQuantity} onChange={(e) => updateLine(l._key, { minQuantity: Number(e.target.value) })} className="input-wood mt-0.5 py-1.5" />
@@ -331,7 +324,7 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
                       {l.isDivisible && (
                         <>
                           {/* Same order as the product form: unit → total quantity → sold quantity & price. */}
-                          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                             <label className="text-xs text-wood-medium">
                               {t('measureUnit')}
                               <div className="mt-0.5 flex gap-1">
@@ -378,17 +371,6 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
                                 className="input-wood mt-0.5 py-1.5"
                               />
                             </label>
-                            <label className="text-xs text-wood-medium">
-                              {`${t('portionPrice')} (DA)`}
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={l.retailPrice ?? 0}
-                                onChange={(e) => updateLine(l._key, { retailPrice: Number(e.target.value) })}
-                                className="input-wood mt-0.5 py-1.5"
-                              />
-                            </label>
                           </div>
 
                           {newUnitFor === l._key && (
@@ -417,22 +399,17 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
                           )}
 
                           <p className="mt-2 text-[11px] text-wood-medium">
-                            {(l.retailStep ?? 0) > 0 && (l.retailPrice ?? 0) > 0 ? (
+                            {(l.capacity ?? 0) > 0 ? (
                               <>
-                                {l.retailStep} {l.unit} = {formatMoney(l.retailPrice ?? 0)} ·{' '}
+                                {l.quantity} × {l.capacity} {l.unit} ={' '}
                                 <b className="text-mono text-wood-dark">
-                                  {formatMoney(round2((l.retailPrice ?? 0) / (l.retailStep || 1)))}
-                                </b>{' '}
-                                / {l.unit}
-                                {(l.capacity ?? 0) > 0 && (
-                                  <>
-                                    {' · '}
-                                    {l.quantity} × {l.capacity} {l.unit} ={' '}
-                                    <b className="text-mono text-wood-dark">
-                                      {round2(l.quantity * (l.capacity ?? 0))} {l.unit}
-                                    </b>
-                                  </>
-                                )}
+                                  {round2(l.quantity * (l.capacity ?? 0))} {l.unit}
+                                </b>
+                                {' · '}
+                                {t('costPerUnit')} {l.unit} :{' '}
+                                <b className="text-mono text-wood-dark">
+                                  {formatMoney(round2(l.purchasePrice / (l.capacity || 1)))}
+                                </b>
                               </>
                             ) : (
                               t('retailHint')

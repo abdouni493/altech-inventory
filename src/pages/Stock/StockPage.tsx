@@ -32,7 +32,6 @@ import { formatMoney, expiryInfo, round2 } from '@/utils/helpers'
 import { isInStock } from '@/utils/calculations'
 import {
   isDivisible,
-  contentUnitPrice,
   contentUnitCost,
   capacityOf,
   shelfBreakdown,
@@ -134,9 +133,9 @@ const RetailStock = ({ product, compact = false }: { product: Product; compact?:
         />
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
-        {(product.retailStep ?? 0) > 0 ? (
+        {product.purchasePrice > 0 ? (
           <p className="text-[10px] text-wood-medium">
-            1 {unit} = <b className="text-sage">{formatMoney(contentUnitPrice(product))}</b>
+            {t('costPerUnit')} {unit} : <b className="text-wood-dark">{formatMoney(contentUnitCost(product))}</b>
           </p>
         ) : (
           <span />
@@ -361,8 +360,8 @@ export const StockPage = () => {
                     <p className="text-mono font-semibold text-wood-dark">{formatMoney(p.purchasePrice)}</p>
                   </div>
                   <div className="rounded-lg bg-sage/10 px-2 py-1.5">
-                    <p className="text-[10px] text-wood-medium">{t('salePrice')}</p>
-                    <p className="text-mono font-semibold text-sage">{formatMoney(p.salePrice)}</p>
+                    <p className="text-[10px] text-wood-medium">{t('stockValue')}</p>
+                    <p className="text-mono font-semibold text-sage">{formatMoney(round2(p.quantity * p.purchasePrice))}</p>
                   </div>
                 </div>
 
@@ -404,7 +403,7 @@ export const StockPage = () => {
                   <th className="px-4 py-3 text-start">{t('brand')}</th>
                   <th className="px-4 py-3 text-start">{t('category')}</th>
                   <th className="px-4 py-3 text-end">{t('purchasePrice')}</th>
-                  <th className="px-4 py-3 text-end">{t('salePrice')}</th>
+                  <th className="px-4 py-3 text-end">{t('stockValue')}</th>
                   <th className="px-4 py-3 text-center">{t('quantity')}</th>
                   <th className="px-4 py-3 text-center">{t('status')}</th>
                   <th className="px-4 py-3 text-center">{t('actions')}</th>
@@ -428,9 +427,7 @@ export const StockPage = () => {
                     <td className="px-4 py-2.5 text-wood-medium">{p.category}</td>
                     <td className="text-mono px-4 py-2.5 text-end">{formatMoney(p.purchasePrice)}</td>
                     <td className="text-mono px-4 py-2.5 text-end text-sage">
-                      {isDivisible(p) && (p.retailStep ?? 0) > 0
-                        ? `${formatMoney(p.retailPrice ?? 0)} / ${p.retailStep} ${p.unit ?? ''}`
-                        : formatMoney(p.salePrice)}
+                      {formatMoney(round2(p.quantity * p.purchasePrice))}
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       <p className="text-mono font-bold">{p.quantity}</p>
@@ -471,7 +468,7 @@ export const StockPage = () => {
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-xl bg-wood-cream/40 p-3"><p className="text-xs text-wood-medium">{t('purchasePrice')}</p><p className="text-mono font-bold text-wood-dark">{formatMoney(viewing.purchasePrice)}</p></div>
-              <div className="rounded-xl bg-sage/10 p-3"><p className="text-xs text-wood-medium">{t('salePrice')}</p><p className="text-mono font-bold text-sage">{formatMoney(viewing.salePrice)}</p></div>
+              <div className="rounded-xl bg-sage/10 p-3"><p className="text-xs text-wood-medium">{t('stockValue')}</p><p className="text-mono font-bold text-sage">{formatMoney(round2(viewing.quantity * viewing.purchasePrice))}</p></div>
               <div className="rounded-xl bg-wood-cream/40 p-3"><p className="text-xs text-wood-medium">{t('mainQuantity')}</p><p className="text-mono font-bold">{viewing.quantity}</p></div>
               <div className="rounded-xl bg-wood-cream/40 p-3"><p className="text-xs text-wood-medium">{t('minQuantity')}</p><p className="text-mono font-bold">{viewing.minQuantity}</p></div>
             </div>
@@ -483,17 +480,9 @@ export const StockPage = () => {
                     <p className="text-xs text-wood-medium">{t('portionSize')}</p>
                     <p className="text-mono font-bold">{viewing.retailStep} {viewing.unit}</p>
                   </div>
-                  <div className="rounded-xl bg-sage/10 p-3">
-                    <p className="text-xs text-wood-medium">{t('portionPrice')}</p>
-                    <p className="text-mono font-bold text-sage">{formatMoney(viewing.retailPrice ?? 0)}</p>
-                  </div>
                   <div className="rounded-xl bg-wood-cream/40 p-3">
                     <p className="text-xs text-wood-medium">{t('costPerUnit')} {viewing.unit}</p>
                     <p className="text-mono font-bold">{formatMoney(contentUnitCost(viewing))}</p>
-                  </div>
-                  <div className="rounded-xl bg-sage/10 p-3">
-                    <p className="text-xs text-wood-medium">{t('pricePerUnit')} {viewing.unit}</p>
-                    <p className="text-mono font-bold text-sage">{formatMoney(contentUnitPrice(viewing))}</p>
                   </div>
                 </div>
               </div>

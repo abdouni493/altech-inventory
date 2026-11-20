@@ -138,8 +138,6 @@ const PURCHASE_SEEDS: PurchaseSeed[] = [
   { id: 'pu-8', supplierId: 'sup-hygiene', daysAgo: 4, paidRatio: 0, lines: [['p-javel', 20], ['p-savon', 15]] },
 ]
 
-const MARGIN = 1.25 // reference value only (no selling in this version)
-
 const PURCHASES: Purchase[] = PURCHASE_SEEDS.map((p, i) => {
   const lines: PurchaseLine[] = p.lines.map(([productId, quantity]) => {
     const s = seedById.get(productId)!
@@ -149,7 +147,6 @@ const PURCHASES: Purchase[] = PURCHASE_SEEDS.map((p, i) => {
       barcode: s.barcode,
       quantity,
       purchasePrice: s.purchasePrice,
-      salePrice: round2(s.purchasePrice * MARGIN),
       minQuantity: s.minQuantity,
       hasExpiration: !!s.expirationDate,
       expirationDate: s.expirationDate,
@@ -254,7 +251,6 @@ const PRODUCTS: Product[] = SEEDS.map((s, i) => {
     brand: s.brand,
     category: s.category,
     purchasePrice: s.purchasePrice,
-    salePrice: round2(s.purchasePrice * MARGIN),
     quantity: Math.max(0, s.initial + purchased - affected),
     minQuantity: s.minQuantity,
     stockUnit: s.stockUnit,

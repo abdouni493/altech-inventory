@@ -28,23 +28,12 @@ export const capacityOf = (p: Product): number => (isDivisible(p) ? (p.capacity 
 export const totalContent = (p: Product): number =>
   isDivisible(p) ? round3(p.quantity * capacityOf(p) + (p.openRemaining ?? 0)) : 0
 
-/** Price of ONE unit of content (per ml / per g). */
-export const contentUnitPrice = (p: Product): number => {
-  const step = p.retailStep ?? 0
-  if (step <= 0) return 0
-  return round2((p.retailPrice ?? 0) / step)
-}
-
 /** Purchase cost of ONE unit of content — used for exact retail margins. */
 export const contentUnitCost = (p: Product): number => {
   const cap = capacityOf(p)
   if (cap <= 0) return 0
   return round2(p.purchasePrice / cap)
 }
-
-/** Amount charged for `amount` units of content. */
-export const retailAmount = (p: Product, amount: number): number =>
-  round2(amount * contentUnitPrice(p))
 
 /** Re-split a total content into sealed containers + opened container. */
 const split = (total: number, capacity: number): { quantity: number; openRemaining: number } => {
@@ -117,9 +106,6 @@ export const splitAmount = (p: Product, amount: number): { boxes: number; rest: 
   const boxes = Math.floor(round3(amount) / cap)
   return { boxes, rest: round3(amount - boxes * cap) }
 }
-
-/** Price of a whole box sold piece by piece — to compare with the box price. */
-export const fullBoxRetailValue = (p: Product): number => round2(capacityOf(p) * contentUnitPrice(p))
 
 /** Opens one sealed box at the counter: its content becomes loose pieces. */
 export const openOneBox = (p: Product): { quantity: number; openRemaining: number } | null => {

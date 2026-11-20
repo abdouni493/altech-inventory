@@ -26,7 +26,7 @@ export interface PushScanResult {
   ok: boolean
   found: boolean
   reason?: string
-  product?: { id: string; name: string; salePrice: number; quantity: number } | null
+  product?: { id: string; name: string; quantity: number } | null
 }
 
 const SCAN_BASE_KEY = 'altech-scan-base'

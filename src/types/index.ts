@@ -73,7 +73,6 @@ export interface Product {
   brand: string
   category: string
   purchasePrice: number
-  salePrice: number
   quantity: number // current quantity in stock (sealed / whole units)
   minQuantity: number // alert threshold
   /** Unit a whole article is counted in — boîte, paquet, flacon… (optional). */
@@ -92,8 +91,6 @@ export interface Product {
   capacity?: number
   /** Reference portion sold at the counter, e.g. 10 (ml). */
   retailStep?: number
-  /** Price charged for one `retailStep` portion, e.g. 1000 DA for 10 ml. */
-  retailPrice?: number
   /** Content still available inside the currently opened unit. */
   openRemaining?: number
   /** Optional barcode printed on ONE piece — scanning it sells one portion. */
@@ -111,7 +108,6 @@ export interface PurchaseLine {
   barcode: string
   quantity: number
   purchasePrice: number
-  salePrice: number
   minQuantity: number
   hasExpiration?: boolean
   expirationDate?: string
@@ -120,7 +116,6 @@ export interface PurchaseLine {
   unit?: string
   capacity?: number
   retailStep?: number
-  retailPrice?: number
 }
 
 export interface Payment {

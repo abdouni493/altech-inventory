@@ -18,7 +18,6 @@ interface ProductState {
     qty: number,
     patch: {
       purchasePrice: number
-      salePrice: number
       minQuantity: number
       hasExpiration?: boolean
       expirationDate?: string
@@ -26,7 +25,6 @@ interface ProductState {
       unit?: string
       capacity?: number
       retailStep?: number
-      retailPrice?: number
     },
   ) => void
   /** Decrease stock after a sale. */
@@ -72,7 +70,6 @@ export const useProductStore = create<ProductState>()(
                 ...p,
                 quantity: p.quantity + qty,
                 purchasePrice: patch.purchasePrice,
-                salePrice: patch.salePrice,
                 minQuantity: patch.minQuantity,
                 // Only overwrite expiration fields when the purchase line carries them,
                 // so re-stocking without expiry keeps the product's existing setting.
@@ -90,7 +87,6 @@ export const useProductStore = create<ProductState>()(
                       unit: patch.unit ?? p.unit,
                       capacity: patch.capacity ?? p.capacity,
                       retailStep: patch.retailStep ?? p.retailStep,
-                      retailPrice: patch.retailPrice ?? p.retailPrice,
                       openRemaining: p.openRemaining ?? 0,
                     }
                   : {}),

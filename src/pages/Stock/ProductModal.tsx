@@ -15,9 +15,7 @@ import {
   CalendarClock,
   PackageOpen,
   Package,
-  Tag,
   X,
-  TrendingUp,
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -29,14 +27,14 @@ import { formatMoney, generateEAN13, round2 } from '@/utils/helpers'
 import { clsx } from '@/utils/clsx'
 import type { Product } from '@/types'
 
-// Creating a product captures its identity and its stock: purchase price, sale
-// price, alert threshold and expiration are filled in by the first purchase.
+// Creating a product captures its identity and its stock: purchase price,
+// alert threshold and expiration are filled in by the first purchase.
 // Editing unlocks every field.
 //
-// Selling by detail ("vente en détail"): a box of 20 cigarettes is stocked as
-// boxes and also sold piece by piece. The box is the stock unit, the piece the
-// detail unit, `capacity` the number of pieces per box and `openRemaining` the
-// pieces left in the box opened at the counter.
+// Detail stock: a box of 20 pieces is stocked as boxes and can also be handed
+// out piece by piece. The box is the stock unit, the piece the detail unit,
+// `capacity` the number of pieces per box and `openRemaining` the pieces left
+// in the box already opened.
 const schema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -47,14 +45,12 @@ const schema = z.object({
   quantity: z.coerce.number().min(0),
   openRemaining: z.coerce.number().min(0).optional(),
   purchasePrice: z.coerce.number().min(0).optional(),
-  salePrice: z.coerce.number().min(0).optional(),
   minQuantity: z.coerce.number().min(0).optional(),
   hasExpiration: z.boolean().optional(),
   expirationDate: z.string().optional(),
   isDivisible: z.boolean().optional(),
   unit: z.string().optional(),
   capacity: z.coerce.number().min(0).optional(),
-  detailPrice: z.coerce.number().min(0).optional(),
   retailStep: z.coerce.number().min(0).optional(),
   retailBarcode: z.string().optional(),
 })
@@ -185,14 +181,12 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
     quantity: 0,
     openRemaining: 0,
     purchasePrice: 0,
-    salePrice: 0,
     minQuantity: 0,
     hasExpiration: false,
     expirationDate: '',
     isDivisible: false,
     unit: 'pièce',
     capacity: 0,
-    detailPrice: 0,
     retailStep: 1,
     retailBarcode: '',
   })
@@ -220,14 +214,12 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
         quantity: product.quantity,
         openRemaining: product.openRemaining ?? 0,
         purchasePrice: product.purchasePrice ?? 0,
-        salePrice: product.salePrice ?? 0,
         minQuantity: product.minQuantity ?? 0,
         hasExpiration: !!product.hasExpiration,
         expirationDate: (product.expirationDate ?? '').slice(0, 10),
         isDivisible: !!product.isDivisible,
         unit: product.unit || 'pièce',
         capacity: product.capacity ?? 0,
-        detailPrice: round2((product.retailPrice ?? 0) / step),
         retailStep: step,
         retailBarcode: product.retailBarcode ?? '',
       })
@@ -244,14 +236,10 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
   const quantity = Number(watch('quantity') ?? 0)
   const openRemaining = Number(watch('openRemaining') ?? 0)
   const capacity = Number(watch('capacity') ?? 0)
-  const detailPrice = Number(watch('detailPrice') ?? 0)
-  const retailStep = Number(watch('retailStep') ?? 1)
-  const salePrice = Number(watch('salePrice') ?? product?.salePrice ?? 0)
   const purchasePrice = Number(watch('purchasePrice') ?? product?.purchasePrice ?? 0)
 
   const boxName = stockUnit || t('unitWord')
   const totalPieces = round2(quantity * capacity + openRemaining)
-  const fullBoxInDetail = round2(capacity * detailPrice)
   const costPerPiece = capacity > 0 ? round2(purchasePrice / capacity) : 0
 
   const handlePrint = useReactToPrint({ content: () => printRef.current })
@@ -263,7 +251,6 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
       unit: data.isDivisible ? (data.unit ?? '') : '',
       capacity: data.isDivisible ? (data.capacity ?? 0) : 0,
       retailStep: data.isDivisible ? step : 0,
-      retailPrice: data.isDivisible ? round2((data.detailPrice ?? 0) * step) : 0,
       openRemaining: data.isDivisible ? (data.openRemaining ?? 0) : 0,
       retailBarcode: data.isDivisible ? (data.retailBarcode ?? '').trim() : '',
     }
@@ -294,7 +281,6 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
       const patch = {
         ...identity,
         purchasePrice: data.purchasePrice ?? 0,
-        salePrice: data.salePrice ?? 0,
         minQuantity: data.minQuantity ?? 0,
         hasExpiration: !!data.hasExpiration,
         expirationDate: data.hasExpiration ? data.expirationDate || undefined : undefined,
@@ -307,7 +293,6 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
       const created = addProduct({
         ...identity,
         purchasePrice: 0,
-        salePrice: 0,
         minQuantity: 0,
         hasExpiration: false,
         expirationDate: undefined,
@@ -383,7 +368,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
           </div>
         </section>
 
-        {/* 2 — selling by detail */}
+        {/* 2 — detail stock (boxes of pieces) */}
         <section
           className={clsx(
             'rounded-xl border p-4 transition-colors',
@@ -397,7 +382,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
 
           {isDivisible && (
             <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <SelectCreate
                   label={`1. ${t('detailUnit')}`}
                   value={unit}
@@ -409,10 +394,6 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
                 <div>
                   <label className="label-wood">{`2. ${t('piecesPerBox').replace('{box}', boxName).replace('{unit}', unit)}`}</label>
                   <input type="number" min={0} step="any" className="input-wood text-mono" {...register('capacity')} />
-                </div>
-                <div>
-                  <label className="label-wood">{`3. ${t('pricePerPiece').replace('{unit}', unit)} (DA)`}</label>
-                  <input type="number" min={0} step="0.01" className="input-wood text-mono" {...register('detailPrice')} />
                 </div>
               </div>
 
@@ -431,35 +412,20 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
               </div>
 
               {/* Live summary */}
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <div className="rounded-lg border border-woodborder bg-white p-2.5">
                   <p className="text-[11px] font-semibold text-wood-medium">{`1 ${boxName}`}</p>
                   <p className="text-mono text-sm font-bold text-wood-dark">{`${capacity || 0} ${unit}`}</p>
                 </div>
                 <div className="rounded-lg border border-woodborder bg-white p-2.5">
-                  <p className="text-[11px] font-semibold text-wood-medium">{`${t('pricePerPiece').replace('{unit}', unit)}`}</p>
-                  <p className="text-mono text-sm font-bold text-sage">{formatMoney(detailPrice)}</p>
-                </div>
-                <div className="rounded-lg border border-woodborder bg-white p-2.5">
-                  <p className="text-[11px] font-semibold text-wood-medium">{t('fullBoxInDetail').replace('{box}', boxName)}</p>
-                  <p className="text-mono text-sm font-bold text-wood-warm">{formatMoney(fullBoxInDetail)}</p>
+                  <p className="text-[11px] font-semibold text-wood-medium">{`${t('costPerUnit')} ${unit}`}</p>
+                  <p className="text-mono text-sm font-bold text-wood-warm">{formatMoney(costPerPiece)}</p>
                 </div>
                 <div className="rounded-lg border border-woodborder bg-white p-2.5">
                   <p className="text-[11px] font-semibold text-wood-medium">{t('totalPieces').replace('{unit}', unit)}</p>
                   <p className="text-mono text-sm font-bold text-wood-dark">{totalPieces}</p>
                 </div>
               </div>
-              {product && salePrice > 0 && fullBoxInDetail > 0 && (
-                <p className="flex items-center gap-1.5 rounded-lg bg-sage/10 px-3 py-2 text-xs font-medium text-[#067647]">
-                  <TrendingUp size={14} />
-                  {t('detailVsBox')
-                    .replace('{box}', boxName)
-                    .replace('{boxPrice}', formatMoney(salePrice))
-                    .replace('{detail}', formatMoney(fullBoxInDetail))
-                    .replace('{diff}', formatMoney(round2(fullBoxInDetail - salePrice)))}
-                  {costPerPiece > 0 && ` · ${t('costPerUnit')} ${unit}: ${formatMoney(costPerPiece)}`}
-                </p>
-              )}
             </div>
           )}
         </section>
@@ -496,13 +462,6 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
                     {`${t('purchasePrice')} — 1 ${boxName} (DA)`}
                   </label>
                   <input type="number" min={0} step="0.01" className="input-wood text-mono" {...register('purchasePrice')} />
-                </div>
-                <div>
-                  <label className="label-wood flex items-center gap-1.5">
-                    <Tag size={14} className="text-sage" />
-                    {`${t('salePrice')} — 1 ${boxName} (DA)`}
-                  </label>
-                  <input type="number" min={0} step="0.01" className="input-wood text-mono" {...register('salePrice')} />
                 </div>
               </>
             )}
