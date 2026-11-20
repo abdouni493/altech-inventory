@@ -1,19 +1,16 @@
 import { forwardRef } from 'react'
-import type { Sale, Purchase, StoreSettings } from '@/types'
+import type { Purchase, StoreSettings } from '@/types'
 import { formatMoney } from '@/utils/helpers'
 import { remaining } from '@/utils/calculations'
 import { format } from 'date-fns'
 
 interface InvoicePrintProps {
-  doc: Sale | Purchase
+  doc: Purchase
   settings: StoreSettings
-  kind: 'sale' | 'purchase'
+  kind: 'purchase'
 }
 
-const isSale = (doc: Sale | Purchase): doc is Sale => 'clientName' in doc
-
 export const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(({ doc, settings, kind }, ref) => {
-  const sale = isSale(doc)
   const lines = doc.lines
   const rest = remaining(doc.total, doc.paid)
 
@@ -42,7 +39,7 @@ export const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(({ doc
         </div>
         <div className="text-right">
           <h2 className="text-xl font-bold uppercase tracking-wide text-wood-warm">
-            {kind === 'sale' ? 'Facture de Vente' : "Facture d'Achat"}
+            {kind === 'purchase' ? "Bon d'achat" : ''}
           </h2>
           <p className="mt-1 text-sm font-semibold">{doc.reference}</p>
           <p className="text-xs text-wood-medium">{format(new Date(doc.date), 'dd/MM/yyyy')}</p>
@@ -51,8 +48,8 @@ export const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(({ doc
 
       {/* Party */}
       <div className="mt-6 rounded-lg bg-wood-cream/50 p-4">
-        <p className="text-xs font-semibold uppercase text-wood-medium">{sale ? 'Client' : 'Fournisseur'}</p>
-        <p className="text-base font-bold text-wood-dark">{sale ? (doc as Sale).clientName : (doc as Purchase).supplierName}</p>
+        <p className="text-xs font-semibold uppercase text-wood-medium">Fournisseur</p>
+        <p className="text-base font-bold text-wood-dark">{doc.supplierName}</p>
       </div>
 
       {/* Lines */}
@@ -67,21 +64,14 @@ export const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(({ doc
         </thead>
         <tbody>
           {lines.map((l, i) => {
-            const unit = sale ? (l as Sale['lines'][number]).unitPrice : (l as Purchase['lines'][number]).purchasePrice
-            // a retail portion is billed in ml / g, not in pieces
-            const measure = sale ? (l as Sale['lines'][number]).unit : undefined
-            const kind = sale ? (l as Sale['lines'][number]).kind : undefined
+            const unit = l.purchasePrice
             return (
               <tr key={i} className="border-b border-wood-cream">
                 <td className="py-2 font-medium">
                   {l.productName}
-                  {kind === 'retail' && measure && (
-                    <span className="ml-1 text-xs text-wood-medium">(détail)</span>
-                  )}
                 </td>
                 <td className="py-2 text-center">
                   {l.quantity}
-                  {kind === 'retail' && measure ? ` ${measure}` : ''}
                 </td>
                 <td className="py-2 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   {formatMoney(unit, settings.currency)}
@@ -98,18 +88,6 @@ export const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(({ doc
       {/* Totals */}
       <div className="mt-6 flex justify-end">
         <div className="w-72 space-y-1.5 text-sm">
-          {sale && (doc as Sale).discount > 0 && (
-            <>
-              <div className="flex justify-between">
-                <span className="text-wood-medium">Sous-total</span>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatMoney((doc as Sale).subtotal, settings.currency)}</span>
-              </div>
-              <div className="flex justify-between text-terracotta">
-                <span>Réduction</span>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>- {formatMoney((doc as Sale).discount, settings.currency)}</span>
-              </div>
-            </>
-          )}
           <div className="flex justify-between border-t border-wood-warm pt-2 text-base font-bold text-wood-dark">
             <span>Total</span>
             <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatMoney(doc.total, settings.currency)}</span>
@@ -129,7 +107,7 @@ export const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(({ doc
       <div className="mt-12 flex justify-between text-sm">
         <div className="text-center">
           <div className="mb-1 h-12 w-44 border-b border-wood-medium" />
-          <span className="text-xs text-wood-medium">{sale ? 'Client' : 'Fournisseur'}</span>
+          <span className="text-xs text-wood-medium">Fournisseur</span>
         </div>
         <div className="text-center">
           <div className="mb-1 h-12 w-44 border-b border-wood-medium" />

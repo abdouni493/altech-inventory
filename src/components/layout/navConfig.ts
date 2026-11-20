@@ -2,9 +2,8 @@ import {
   LayoutDashboard,
   Boxes,
   ShoppingBag,
-  ScanBarcode,
-  Receipt,
-  Users,
+  ClipboardList,
+  Building2,
   Truck,
   UserCog,
   Wallet,
@@ -26,18 +25,17 @@ export interface NavItem {
   hotkey: string
 }
 
-// Icons & accents of the Altech POS identity (blue · cyan · amber · green).
+// Icons & accents of the Altech Inventory identity (blue · cyan · amber · green).
 export const NAV_ITEMS: NavItem[] = [
   { key: 'dashboard', path: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard, color: '#8EA6FF', hotkey: '1' },
-  { key: 'pos', path: '/pos', labelKey: 'pos', icon: ScanBarcode, color: '#FFC24D', hotkey: '2' },
+  { key: 'affectations', path: '/affectations', labelKey: 'affectations', icon: ClipboardList, color: '#FFC24D', hotkey: '2' },
   { key: 'stock', path: '/stock', labelKey: 'stock', icon: Boxes, color: '#5EEAD4', hotkey: '3' },
   { key: 'purchase', path: '/purchase', labelKey: 'purchase', icon: ShoppingBag, color: '#7DD3FC', hotkey: '4' },
-  { key: 'sales', path: '/sales', labelKey: 'sales', icon: Receipt, color: '#86EFAC', hotkey: '5' },
-  { key: 'clients', path: '/clients', labelKey: 'clients', icon: Users, color: '#93C5FD', hotkey: '6' },
-  { key: 'suppliers', path: '/suppliers', labelKey: 'suppliers', icon: Truck, color: '#67E8F9', hotkey: '7' },
-  { key: 'workers', path: '/workers', labelKey: 'workers', icon: UserCog, color: '#C7D2FE', hotkey: '8' },
+  { key: 'departments', path: '/departments', labelKey: 'departments', icon: Building2, color: '#93C5FD', hotkey: '5' },
+  { key: 'suppliers', path: '/suppliers', labelKey: 'suppliers', icon: Truck, color: '#67E8F9', hotkey: '6' },
+  { key: 'workers', path: '/workers', labelKey: 'workers', icon: UserCog, color: '#C7D2FE', hotkey: '7' },
   { key: 'expenses', path: '/expenses', labelKey: 'expenses', icon: Wallet, color: '#FCA5A5', hotkey: 'E' },
-  { key: 'caisse', path: '/caisse', labelKey: 'caisse', icon: Banknote, color: '#6EE7B7', hotkey: 'C' },
+  { key: 'budget', path: '/budget', labelKey: 'budget', icon: Banknote, color: '#6EE7B7', hotkey: 'B' },
   { key: 'reports', path: '/reports', labelKey: 'reports', icon: PieChart, color: '#FDE68A', hotkey: 'R' },
   { key: 'settings', path: '/settings', labelKey: 'settings', icon: Settings, color: '#CBD5E1', hotkey: 'P' },
 ]

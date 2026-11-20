@@ -14,16 +14,21 @@ import {
   HardDrive,
   Eye,
   EyeOff,
-  ScanBarcode,
+  ClipboardList,
   Boxes,
   WifiOff,
   ArrowLeft,
+  PlayCircle,
+  Sparkles,
 } from 'lucide-react'
 import { useAuthStore, authErrorMessage } from '@/store/useAuthStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { BrandMark } from '@/components/layout/BrandMark'
+import { DEMO_EMAIL, DEMO_PASSWORD } from '@/data/demoData'
+import { useDepartmentStore } from '@/store/useDepartmentStore'
+import { loadDemoData } from '@/utils/export'
 
 const loginSchema = z.object({
   identifier: z.string().min(1),
@@ -48,6 +53,7 @@ export const Login = () => {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
   const createAdmin = useAuthStore((s) => s.createAdmin)
+  const loginDemo = useAuthStore((s) => s.loginDemo)
   // Reactive: the moment an admin exists, the creation button is gone for good.
   const hasAdmin = useAuthStore((s) => s.users.some((u) => u.role === 'admin'))
 
@@ -55,6 +61,22 @@ export const Login = () => {
   const [submitting, setSubmitting] = useState(false)
   const [creating, setCreating] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [demoLoading, setDemoLoading] = useState(false)
+
+  const onDemo = async () => {
+    setDemoLoading(true)
+    try {
+      // First demo login on a database without the inventory data: load the test set.
+      if (useDepartmentStore.getState().departments.length === 0) await loadDemoData()
+      const user = await loginDemo()
+      toast.success(`${t('welcomeBack')}, ${user.fullName}`)
+      navigate('/dashboard')
+    } catch (e) {
+      toast.error(authErrorMessage(e))
+    } finally {
+      setDemoLoading(false)
+    }
+  }
 
   const {
     register,
@@ -136,7 +158,7 @@ export const Login = () => {
             {t('loginHeadline')}
           </motion.h1>
           <div className="mt-8 space-y-5">
-            <Feature icon={<ScanBarcode size={20} />} title={t('featurePos')} text={t('featurePosText')} />
+            <Feature icon={<ClipboardList size={20} />} title={t('featurePos')} text={t('featurePosText')} />
             <Feature icon={<Boxes size={20} />} title={t('featureRetail')} text={t('featureRetailText')} />
             <Feature icon={<WifiOff size={20} />} title={t('featureOffline')} text={t('featureOfflineText')} />
           </div>
@@ -144,7 +166,7 @@ export const Login = () => {
 
         {/* scanner beam decoration */}
         <div className="pointer-events-none absolute -end-24 bottom-24 h-64 w-64 rounded-full bg-aqua/20 blur-3xl" />
-        <p className="relative z-10 text-xs text-white/40">© {new Date().getFullYear()} Altech POS</p>
+        <p className="relative z-10 text-xs text-white/40">© {new Date().getFullYear()} Altech Inventory · {t('demoVersion')}</p>
       </div>
 
       {/* Form side */}
@@ -184,14 +206,35 @@ export const Login = () => {
                 transition={{ duration: 0.2 }}
               >
                 <h2 className="text-display text-2xl font-bold text-wood-dark">{t('login')}</h2>
-                <p className="mb-6 mt-1 text-sm text-wood-medium">{t('loginSubtitle')}</p>
+                <p className="mb-5 mt-1 text-sm text-wood-medium">{t('loginSubtitle')}</p>
+
+                {/* Demo version: one click to explore with test data */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                  className="mb-5 overflow-hidden rounded-2xl border border-wood-warm/25 bg-gradient-to-br from-wood-warm/10 via-white to-aqua/10 p-4"
+                >
+                  <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-wood-warm">
+                    <Sparkles size={14} />
+                    {t('demoVersion')}
+                  </p>
+                  <p className="mb-3 mt-1 text-xs text-wood-medium">{t('demoHint')}</p>
+                  <Button type="button" size="lg" variant="gold" className="w-full" onClick={onDemo} disabled={demoLoading}>
+                    {demoLoading ? <Loader2 size={18} className="animate-spin" /> : <PlayCircle size={18} />}
+                    {t('demoLogin')}
+                  </Button>
+                  <p className="text-mono mt-2 text-center text-[11px] text-wood-medium">
+                    {t('demoCredentials')} : {DEMO_EMAIL} / {DEMO_PASSWORD}
+                  </p>
+                </motion.div>
 
                 <form onSubmit={handleSubmit(onLogin)} className="space-y-4">
                   <div>
                     <label className="label-wood">
                       {t('email')} / {t('username')}
                     </label>
-                    <input {...register('identifier')} autoFocus autoComplete="username" placeholder="admin@boutique.dz" className={fieldClass} />
+                    <input {...register('identifier')} autoFocus autoComplete="username" placeholder="demo@altech.dz" className={fieldClass} />
                     {errors.identifier && <p className="mt-1 text-xs text-terracotta">{t('required')}</p>}
                   </div>
                   <div>

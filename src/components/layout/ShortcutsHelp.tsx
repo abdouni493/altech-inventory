@@ -2,7 +2,6 @@ import { Keyboard } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { NAV_ITEMS } from './navConfig'
 import { useTranslation } from '@/i18n/useTranslation'
-import type { TranslationKey } from '@/i18n/translations'
 
 const Row = ({ keys, label }: { keys: string[]; label: string }) => (
   <div className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 odd:bg-wood-cream/50">
@@ -17,32 +16,11 @@ const Row = ({ keys, label }: { keys: string[]; label: string }) => (
   </div>
 )
 
-const POS_SHORTCUTS: { keys: string[]; label: TranslationKey }[] = [
-  { keys: ['F2'], label: 'scFocusSearch' },
-  { keys: ['3', '*', 'code'], label: 'scMultiply' },
-  { keys: ['F4'], label: 'scClient' },
-  { keys: ['F6'], label: 'scDiscount' },
-  { keys: ['F7'], label: 'scReceived' },
-  { keys: ['F8'], label: 'scHold' },
-  { keys: ['F9'], label: 'scValidate' },
-  { keys: ['Ctrl', 'Entrée'], label: 'scValidate' },
-  { keys: ['+', '−'], label: 'scLastLineQty' },
-  { keys: ['Suppr'], label: 'scRemoveLast' },
-  { keys: ['Échap'], label: 'scClearSearch' },
-]
-
-const RETAIL_SHORTCUTS: { keys: string[]; label: TranslationKey }[] = [
-  { keys: ['B'], label: 'scRetailBox' },
-  { keys: ['D'], label: 'scRetailDetail' },
-  { keys: ['↑', '↓'], label: 'scRetailQty' },
-  { keys: ['Entrée'], label: 'scRetailConfirm' },
-]
-
 export const ShortcutsHelp = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const { t } = useTranslation()
   return (
     <Modal open={open} onClose={onClose} title={t('keyboardShortcuts')} subtitle={t('keyboardShortcutsHint')} icon={<Keyboard size={20} />} size="lg">
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5">
         <div>
           <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-wood-medium">{t('navigation')}</h4>
           <Row keys={['F1']} label={t('keyboardShortcuts')} />
@@ -50,20 +28,6 @@ export const ShortcutsHelp = ({ open, onClose }: { open: boolean; onClose: () =>
           {NAV_ITEMS.map((i) => (
             <Row key={i.key} keys={['Alt', i.hotkey]} label={t(i.labelKey)} />
           ))}
-        </div>
-        <div className="space-y-5">
-          <div>
-            <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-wood-medium">{t('pos')}</h4>
-            {POS_SHORTCUTS.map((s, i) => (
-              <Row key={i} keys={s.keys} label={t(s.label)} />
-            ))}
-          </div>
-          <div>
-            <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-wood-medium">{t('retailSelling')}</h4>
-            {RETAIL_SHORTCUTS.map((s, i) => (
-              <Row key={i} keys={s.keys} label={t(s.label)} />
-            ))}
-          </div>
         </div>
       </div>
     </Modal>

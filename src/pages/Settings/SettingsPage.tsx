@@ -14,6 +14,7 @@ import {
   Wifi,
   Loader2,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/Misc'
 import { Button } from '@/components/ui/Button'
@@ -22,7 +23,8 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore, authErrorMessage } from '@/store/useAuthStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { useDbStatus } from '@/lib/database'
-import { exportData, importData } from '@/utils/export'
+import { exportData, importData, loadDemoData } from '@/utils/export'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { fadeUp, staggerContainer } from '@/utils/animations'
 
 const Section = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
@@ -42,6 +44,7 @@ export const SettingsPage = () => {
   const fileRef = useRef<HTMLInputElement>(null)
   const logoRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  const [demoConfirm, setDemoConfirm] = useState(false)
   const { backend, dataDir, lanUrls, lastSavedAt } = useDbStatus()
 
   const [store, setStore] = useState(settings)
@@ -186,6 +189,14 @@ export const SettingsPage = () => {
               <input ref={fileRef} type="file" accept="application/json" onChange={onRestore} className="hidden" />
               <Button variant="gold" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}{t('restore')}</Button>
             </div>
+            <div className="rounded-xl border border-wood-warm/25 bg-wood-warm/5 p-4">
+              <p className="flex items-center gap-1.5 font-semibold text-wood-dark"><Sparkles size={16} className="text-wood-warm" />{t('reloadDemoData')}</p>
+              <p className="mb-3 text-xs text-wood-medium">{t('reloadDemoDataHint')}</p>
+              <Button variant="outline" disabled={busy} onClick={() => setDemoConfirm(true)}>
+                {busy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                {t('reloadDemoData')}
+              </Button>
+            </div>
           </div>
         </Section>
 
@@ -232,6 +243,26 @@ export const SettingsPage = () => {
           </Section>
         </div>
       </motion.div>
+
+      <ConfirmDialog
+        open={demoConfirm}
+        onClose={() => setDemoConfirm(false)}
+        title={t('reloadDemoData')}
+        message={t('reloadDemoDataHint')}
+        confirmLabel={t('confirm')}
+        tone="gold"
+        onConfirm={async () => {
+          setBusy(true)
+          try {
+            await loadDemoData()
+            toast.success(t('demoDataLoaded'))
+          } catch (err) {
+            toast.error(authErrorMessage(err))
+          } finally {
+            setBusy(false)
+          }
+        }}
+      />
     </div>
   )
 }

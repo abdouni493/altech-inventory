@@ -5,7 +5,7 @@ import { uid } from '@/utils/helpers'
 import { useWorkerStore } from './useWorkerStore'
 import { flushDatabase, initDatabase } from '@/lib/database'
 
-const SESSION_KEY = 'altech-pos-session'
+const SESSION_KEY = 'altech-inventory-session'
 
 const readSession = (): string | null => {
   try {
@@ -65,6 +65,8 @@ interface AuthState {
 
   init: () => Promise<void>
   login: (identifier: string, password: string) => Promise<AppUser | null>
+  /** Demo version: signs in with the demonstration account (created if missing). */
+  loginDemo: () => Promise<AppUser>
   createAdmin: (data: { fullName: string; username: string; email: string; password: string }) => Promise<AppUser>
   hasAdmin: () => boolean
   logout: () => void
@@ -122,6 +124,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (!user || !verifyPassword(password, user.salt, user.passwordHash)) return null
     const appUser = toAppUser(user, useWorkerStore.getState().workers)
     if (!appUser) return null
+    writeSession(user.id)
+    set({ currentUser: appUser })
+    return appUser
+  },
+
+  loginDemo: async () => {
+    const { demoAdminUser, DEMO_USER_ID } = await import('@/data/demoData')
+    let user = get().users.find((u) => u.id === DEMO_USER_ID)
+    if (!user) {
+      user = demoAdminUser()
+      const demo = user
+      set((s) => ({ users: [...s.users, demo] }))
+      await flushDatabase()
+    }
+    const appUser = { ...toAppUser(user, [])!, isDemo: true }
     writeSession(user.id)
     set({ currentUser: appUser })
     return appUser
@@ -221,6 +238,6 @@ export const authErrorMessage = (error: unknown): string => {
   if (/USERNAME_TAKEN/.test(raw)) return "Ce nom d'utilisateur est déjà utilisé"
   if (/WORKER_NOT_FOUND/.test(raw)) return 'Employé introuvable'
   if (/INVALID_BACKUP/.test(raw)) return 'Fichier de sauvegarde invalide'
-  if (/Failed to fetch|NetworkError|HTTP 5/i.test(raw)) return 'Serveur local injoignable — relancez Altech POS'
+  if (/Failed to fetch|NetworkError|HTTP 5/i.test(raw)) return 'Serveur local injoignable — relancez Altech Inventory'
   return raw || 'Erreur inconnue'
 }

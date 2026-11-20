@@ -17,7 +17,7 @@ export const exportData = async (): Promise<void> => {
   const payload = {
     [FILE_MARKER]: true,
     version: 3,
-    source: 'altech-pos-local',
+    source: 'altech-inventory-local',
     exportedAt: new Date().toISOString(),
     data: snapshot,
   }
@@ -25,7 +25,7 @@ export const exportData = async (): Promise<void> => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `altech-pos-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = `altech-inventory-backup-${new Date().toISOString().slice(0, 10)}.json`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -44,12 +44,10 @@ const normalise = (parsed: any) => {
       brands: data.brands ?? [],
       categories: data.categories ?? [],
       units: data.units ?? [],
-      clients: data.clients ?? [],
       suppliers: data.suppliers ?? [],
       purchases: data.purchases ?? [],
-      sales: data.sales ?? [],
-      sheets: data.sheets ?? [],
-      productions: data.productions ?? [],
+      departments: data.departments ?? [],
+      affectations: data.affectations ?? [],
       workers: data.workers ?? [],
       workerRoles: data.workerRoles ?? [],
       expenses: data.expenses ?? [],
@@ -68,12 +66,10 @@ const normalise = (parsed: any) => {
     brands: products.brands ?? [],
     categories: products.categories ?? [],
     units: products.units ?? [],
-    sheets: [],
-    productions: [],
-    clients: state('cosmetics-clients-v1').clients ?? [],
+    departments: [],
+    affectations: [],
     suppliers: state('cosmetics-suppliers-v1').suppliers ?? [],
     purchases: state('cosmetics-purchases-v1').purchases ?? [],
-    sales: state('cosmetics-sales-v1').sales ?? [],
     workers: workers.workers ?? [],
     workerRoles: workers.roles ?? [],
     expenses: state('cosmetics-expenses-v1').expenses ?? [],
@@ -98,3 +94,15 @@ export const importData = (file: File): Promise<void> =>
     reader.onerror = () => reject(reader.error)
     reader.readAsText(file)
   })
+
+/**
+ * Demo version: replaces every table with the demonstration data set. The
+ * logins already on this PC are kept, the demo account is added.
+ */
+export const loadDemoData = async (): Promise<void> => {
+  const { buildDemoSnapshot } = await import('@/data/demoData')
+  const { useAuthStore } = await import('@/store/useAuthStore')
+  const demo = buildDemoSnapshot()
+  const existing = useAuthStore.getState().users.filter((u) => !demo.users.some((d) => d.id === u.id))
+  await replaceDatabase({ ...demo, users: [...demo.users, ...existing] })
+}

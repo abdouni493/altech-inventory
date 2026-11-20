@@ -1,12 +1,11 @@
 import type {
-  Sale,
-  SaleLine,
+  Affectation,
+  Department,
   Purchase,
   Worker,
   Expense,
   Product,
   CaisseTransaction,
-  Production,
 } from '@/types'
 import { round2, monthKey } from './helpers'
 import { isDivisible, totalContent } from './retail'
@@ -29,13 +28,6 @@ export interface PartyStats {
   count: number
 }
 
-export const clientStats = (clientId: string, sales: Sale[]): PartyStats => {
-  const list = sales.filter((s) => s.clientId === clientId)
-  const totalAmount = round2(list.reduce((s, x) => s + x.total, 0))
-  const totalPaid = round2(list.reduce((s, x) => s + x.paid, 0))
-  return { totalAmount, totalPaid, totalDebt: remaining(totalAmount, totalPaid), count: list.length }
-}
-
 export const supplierStats = (supplierId: string, purchases: Purchase[]): PartyStats => {
   const list = purchases.filter((p) => p.supplierId === supplierId)
   const totalAmount = round2(list.reduce((s, x) => s + x.total, 0))
@@ -43,13 +35,10 @@ export const supplierStats = (supplierId: string, purchases: Purchase[]): PartyS
   return { totalAmount, totalPaid, totalDebt: remaining(totalAmount, totalPaid), count: list.length }
 }
 
-const inRange = (dateStr: string, start: Date, end: Date): boolean => {
+export const inRange = (dateStr: string, start: Date, end: Date): boolean => {
   const d = new Date(dateStr)
   return isWithinInterval(d, { start, end })
 }
-
-export const sumSales = (sales: Sale[], start: Date, end: Date): number =>
-  round2(sales.filter((s) => inRange(s.date, start, end)).reduce((acc, s) => acc + s.total, 0))
 
 export const sumPurchases = (purchases: Purchase[], start: Date, end: Date): number =>
   round2(purchases.filter((p) => inRange(p.date, start, end)).reduce((acc, p) => acc + p.total, 0))
@@ -65,15 +54,15 @@ export const sumSalaries = (workers: Worker[], start: Date, end: Date): number =
     ),
   )
 
+/** Value (at purchase cost) of everything handed to departments in range. */
+export const sumAffectations = (affectations: Affectation[], start: Date, end: Date): number =>
+  round2(affectations.filter((a) => inRange(a.date, start, end)).reduce((acc, a) => acc + a.total, 0))
+
 // ----------------------------------------------------------------------------
-// Caisse (Treasury / Cash register)
+// Budget (allocations, withdrawals and every expense of the organisation)
 // ----------------------------------------------------------------------------
 
-/** Sum the cash actually collected on sales whose date falls in range. */
-export const sumSalesPaid = (sales: Sale[], start: Date, end: Date): number =>
-  round2(sales.filter((s) => inRange(s.date, start, end)).reduce((acc, s) => acc + s.paid, 0))
-
-/** Sum the cash actually disbursed on purchases whose date falls in range. */
+/** Sum the money actually disbursed on purchases whose date falls in range. */
 export const sumPurchasesPaid = (purchases: Purchase[], start: Date, end: Date): number =>
   round2(purchases.filter((p) => inRange(p.date, start, end)).reduce((acc, p) => acc + p.paid, 0))
 
@@ -89,94 +78,77 @@ export const sumCaisse = (
       .reduce((acc, t) => acc + t.amount, 0),
   )
 
-export interface CaissePeriodStats {
-  /** Total invoiced sales (billed). */
-  salesTotal: number
-  /** Cash collected from sales. */
-  salesCollected: number
+export interface BudgetPeriodStats {
   /** Total invoiced purchases (billed). */
   purchasesTotal: number
-  /** Cash disbursed for purchases. */
+  /** Money disbursed for purchases. */
   purchasesPaid: number
   expenses: number
   salaries: number
+  /** Budget allocations received. */
   deposits: number
   withdrawals: number
-  /** Money entering the caisse: sales collected + manual deposits. */
+  /** Value of the stock handed to the departments. */
+  affectedValue: number
+  /** Money entering the budget: allocations. */
   cashIn: number
-  /** Money leaving the caisse: purchases paid + expenses + salaries + withdrawals. */
+  /** Money leaving the budget: purchases paid + expenses + salaries + withdrawals. */
   cashOut: number
   /** cashIn − cashOut. */
   netFlow: number
 }
 
-/** Aggregate every cash movement of the store over a date range. */
-export const caissePeriodStats = (
+/** Aggregate every budget movement over a date range. */
+export const budgetPeriodStats = (
   transactions: CaisseTransaction[],
-  sales: Sale[],
   purchases: Purchase[],
   expenses: Expense[],
   workers: Worker[],
+  affectations: Affectation[],
   start: Date,
   end: Date,
-): CaissePeriodStats => {
-  const salesTotal = sumSales(sales, start, end)
-  const salesCollected = sumSalesPaid(sales, start, end)
+): BudgetPeriodStats => {
   const purchasesTotal = sumPurchases(purchases, start, end)
   const purchasesPaid = sumPurchasesPaid(purchases, start, end)
   const expensesSum = sumExpenses(expenses, start, end)
   const salaries = sumSalaries(workers, start, end)
   const deposits = sumCaisse(transactions, 'deposit', start, end)
   const withdrawals = sumCaisse(transactions, 'withdrawal', start, end)
-  const cashIn = round2(salesCollected + deposits)
+  const cashIn = deposits
   const cashOut = round2(purchasesPaid + expensesSum + salaries + withdrawals)
   return {
-    salesTotal,
-    salesCollected,
     purchasesTotal,
     purchasesPaid,
     expenses: expensesSum,
     salaries,
     deposits,
     withdrawals,
+    affectedValue: sumAffectations(affectations, start, end),
     cashIn,
     cashOut,
     netFlow: round2(cashIn - cashOut),
   }
 }
 
-export interface StoreWealth {
-  /** All-time cash balance held in the caisse. */
-  caisseBalance: number
+export interface OrgWealth {
+  /** All-time budget still available. */
+  budgetBalance: number
   /** Purchase-cost value of everything currently in stock. */
   stockValue: number
-  /** Cost value of the finished batches still waiting to be sold. */
-  productionValue: number
-  /** Money clients still owe the store. */
-  clientReceivables: number
-  /** Money the store still owes suppliers. */
+  /** Value of everything ever handed to departments. */
+  affectedValue: number
+  /** Money still owed to suppliers. */
   supplierPayables: number
-  /** caisse + stock + production + receivables − payables. */
+  /** budget + stock − payables. */
   totalWealth: number
 }
 
 const VERY_EARLY = new Date(0)
 const VERY_LATE = new Date(8640000000000000)
 
-/** Compute the global financial snapshot of the store (date-independent). */
-export const storeWealth = (
-  transactions: CaisseTransaction[],
-  sales: Sale[],
-  purchases: Purchase[],
-  expenses: Expense[],
-  workers: Worker[],
-  products: Product[],
-  productions: Production[] = [],
-): StoreWealth => {
-  const all = caissePeriodStats(transactions, sales, purchases, expenses, workers, VERY_EARLY, VERY_LATE)
-  const caisseBalance = all.netFlow
-  // Sealed units + the content still inside an opened container.
-  const stockValue = round2(
+/** Purchase-cost value of the products on the shelves. */
+export const stockValueOf = (products: Product[]): number =>
+  round2(
     products.reduce((s, p) => {
       const base = p.quantity * p.purchasePrice
       const open =
@@ -186,117 +158,26 @@ export const storeWealth = (
       return s + base + open
     }, 0),
   )
-  const productionValue = productionStockValue(productions)
-  const clientReceivables = round2(sales.reduce((s, x) => s + Math.max(0, x.total - x.paid), 0))
+
+/** Global financial snapshot of the organisation (date-independent). */
+export const orgWealth = (
+  transactions: CaisseTransaction[],
+  purchases: Purchase[],
+  expenses: Expense[],
+  workers: Worker[],
+  products: Product[],
+  affectations: Affectation[],
+): OrgWealth => {
+  const all = budgetPeriodStats(transactions, purchases, expenses, workers, affectations, VERY_EARLY, VERY_LATE)
+  const stockValue = stockValueOf(products)
   const supplierPayables = round2(purchases.reduce((s, x) => s + Math.max(0, x.total - x.paid), 0))
   return {
-    caisseBalance,
+    budgetBalance: all.netFlow,
     stockValue,
-    productionValue,
-    clientReceivables,
+    affectedValue: all.affectedValue,
     supplierPayables,
-    totalWealth: round2(
-      caisseBalance + stockValue + productionValue + clientReceivables - supplierPayables,
-    ),
+    totalWealth: round2(all.netFlow + stockValue - supplierPayables),
   }
-}
-
-// ----------------------------------------------------------------------------
-// Production analytics
-// ----------------------------------------------------------------------------
-
-/** Finished units of a batch still available for sale. */
-export const productionRemaining = (p: Production): number =>
-  p.status === 'recovered' ? 0 : Math.max(0, round2(p.outputQuantity - p.soldQuantity))
-
-/** Cost of ONE finished unit of a batch. */
-export const productionUnitCost = (p: Production): number =>
-  p.outputQuantity > 0 ? round2(p.totalCost / p.outputQuantity) : 0
-
-/** Cost value of everything produced but not sold yet. */
-export const productionStockValue = (productions: Production[]): number =>
-  round2(
-    productions.reduce((s, p) => s + productionRemaining(p) * productionUnitCost(p), 0),
-  )
-
-export interface ProductionStats {
-  /** Batches manufactured in the period. */
-  count: number
-  /** Finished units manufactured. */
-  producedUnits: number
-  /** Raw material consumed, at purchase cost. */
-  totalCost: number
-  /** What the whole output would bring in once entirely sold. */
-  expectedRevenue: number
-  /** expectedRevenue − totalCost. */
-  expectedGain: number
-  /** Units already sold at the POS. */
-  soldUnits: number
-  /** Cash value of the units already sold. */
-  soldRevenue: number
-  /** Margin actually realised on the units sold. */
-  realisedGain: number
-  /** Units still in the workshop. */
-  remainingUnits: number
-  /** Cost value of those remaining units. */
-  remainingValue: number
-  /** Batches whose components went back to the stock. */
-  recoveredCount: number
-}
-
-export const periodProductions = (productions: Production[], start: Date, end: Date): Production[] =>
-  productions
-    .filter((p) => inRange(p.date, start, end))
-    .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-
-export const productionStats = (list: Production[]): ProductionStats => {
-  const active = list.filter((p) => p.status !== 'recovered')
-  const soldUnits = round2(active.reduce((s, p) => s + p.soldQuantity, 0))
-  const soldRevenue = round2(active.reduce((s, p) => s + p.soldQuantity * p.outputUnitPrice, 0))
-  const soldCost = round2(active.reduce((s, p) => s + p.soldQuantity * productionUnitCost(p), 0))
-  return {
-    count: list.length,
-    producedUnits: round2(active.reduce((s, p) => s + p.outputQuantity, 0)),
-    totalCost: round2(active.reduce((s, p) => s + p.totalCost, 0)),
-    expectedRevenue: round2(active.reduce((s, p) => s + p.totalRevenue, 0)),
-    expectedGain: round2(active.reduce((s, p) => s + p.gain, 0)),
-    soldUnits,
-    soldRevenue,
-    realisedGain: round2(soldRevenue - soldCost),
-    remainingUnits: round2(active.reduce((s, p) => s + productionRemaining(p), 0)),
-    remainingValue: productionStockValue(active),
-    recoveredCount: list.filter((p) => p.status === 'recovered').length,
-  }
-}
-
-export interface ProductionComponentAgg {
-  productId: string
-  name: string
-  unit?: string
-  quantity: number
-  cost: number
-}
-
-/** Every raw material eaten by the batches of a period, grouped by product. */
-export const periodProductionComponents = (
-  productions: Production[],
-  start: Date,
-  end: Date,
-): ProductionComponentAgg[] => {
-  const map = new Map<string, ProductionComponentAgg>()
-  periodProductions(productions, start, end)
-    .filter((p) => p.status !== 'recovered')
-    .forEach((p) =>
-      p.lines.forEach((l) => {
-        const cur =
-          map.get(l.productId) ??
-          { productId: l.productId, name: l.productName, unit: l.byContent ? l.unit : undefined, quantity: 0, cost: 0 }
-        cur.quantity = round2(cur.quantity + l.quantity)
-        cur.cost = round2(cur.cost + l.quantity * l.unitCost)
-        map.set(l.productId, cur)
-      }),
-    )
-  return [...map.values()].sort((a, b) => b.cost - a.cost)
 }
 
 /**
@@ -307,23 +188,24 @@ export const isInStock = (p: Product): boolean =>
   isDivisible(p) ? totalContent(p) > 0 : p.quantity > 0
 
 export interface DashboardStats {
-  revenueToday: number
-  revenueMonth: number
-  /** How many DIFFERENT articles are actually available — never a unit total. */
+  affectationsToday: number
+  affectationsMonth: number
+  affectedValueMonth: number
+  /** How many DIFFERENT articles are actually available. */
   productsInStock: number
   stockAlertCount: number
   purchasesMonth: number
   expensesMonth: number
-  netProfit: number
   salariesMonth: number
+  spentMonth: number
 }
 
 export const dashboardStats = (
-  sales: Sale[],
   purchases: Purchase[],
   expenses: Expense[],
   products: Product[],
   workers: Worker[],
+  affectations: Affectation[],
 ): DashboardStats => {
   const now = new Date()
   const dayStart = startOfDay(now)
@@ -331,36 +213,34 @@ export const dashboardStats = (
   const monStart = startOfMonth(now)
   const monEnd = endOfMonth(now)
 
-  const revenueMonth = sumSales(sales, monStart, monEnd)
   const purchasesMonth = sumPurchases(purchases, monStart, monEnd)
   const expensesMonth = sumExpenses(expenses, monStart, monEnd)
   const salariesMonth = sumSalaries(workers, monStart, monEnd)
 
   return {
-    revenueToday: sumSales(sales, dayStart, dayEnd),
-    revenueMonth,
-    // Only the articles that really sit in the stock — an out-of-stock product
-    // is never counted, and the tile shows articles, not accumulated units.
+    affectationsToday: affectations.filter((a) => inRange(a.date, dayStart, dayEnd)).length,
+    affectationsMonth: affectations.filter((a) => inRange(a.date, monStart, monEnd)).length,
+    affectedValueMonth: sumAffectations(affectations, monStart, monEnd),
     productsInStock: products.filter(isInStock).length,
     stockAlertCount: products.filter((p) => p.quantity <= p.minQuantity).length,
     purchasesMonth,
     expensesMonth,
     salariesMonth,
-    netProfit: round2(revenueMonth - purchasesMonth - expensesMonth - salariesMonth),
+    spentMonth: round2(purchasesMonth + expensesMonth + salariesMonth),
   }
 }
 
 export interface MonthPoint {
   month: string
-  sales: number
   purchases: number
+  affectations: number
   expenses: number
 }
 
 export const last12Months = (
-  sales: Sale[],
   purchases: Purchase[],
   expenses: Expense[],
+  affectations: Affectation[],
 ): MonthPoint[] => {
   const points: MonthPoint[] = []
   const now = new Date()
@@ -370,36 +250,16 @@ export const last12Months = (
     const end = endOfMonth(ref)
     points.push({
       month: format(ref, 'MMM yy'),
-      sales: sumSales(sales, start, end),
       purchases: sumPurchases(purchases, start, end),
+      affectations: sumAffectations(affectations, start, end),
       expenses: sumExpenses(expenses, start, end),
     })
   }
   return points
 }
 
-export interface ProductSalesAgg {
-  productId: string
-  name: string
-  quantity: number
-  amount: number
-}
-
-export const topProducts = (sales: Sale[], limit = 5): ProductSalesAgg[] => {
-  const map = new Map<string, ProductSalesAgg>()
-  sales.forEach((sale) =>
-    sale.lines.forEach((l) => {
-      const cur = map.get(l.productId) ?? { productId: l.productId, name: l.productName, quantity: 0, amount: 0 }
-      cur.quantity += l.quantity
-      cur.amount += l.quantity * l.unitPrice
-      map.set(l.productId, cur)
-    }),
-  )
-  return [...map.values()].sort((a, b) => b.quantity - a.quantity).slice(0, limit)
-}
-
 // ----------------------------------------------------------------------------
-// Per-product & per-category analytics (used by Caisse + Reports)
+// Per-product, per-department & per-category analytics (Budget + Reports)
 // ----------------------------------------------------------------------------
 
 const productIndex = (products: Product[]): Map<string, Product> =>
@@ -437,141 +297,220 @@ export const periodPurchasedProducts = (
   return [...map.values()].sort((a, b) => b.total - a.total)
 }
 
-export interface ProductSaleAgg {
+export interface ProductAffectedAgg {
   productId: string
   name: string
   category: string
   quantity: number
-  revenue: number
-  cost: number
-  gain: number
+  value: number
+  /** Number of affectations the product appears in. */
+  count: number
+  /** Distinct departments that received it. */
+  departments: number
 }
 
-/**
- * Cost of one step of a sale line. Lines carry the cost captured at sale time
- * (exact even if prices moved since, and the only correct figure for a retail
- * portion or a production output); the product is only a fallback for the
- * documents saved before that snapshot existed.
- */
-export const lineUnitCost = (line: SaleLine, product?: Product): number => {
-  if (line.unitCost !== undefined && line.unitCost !== null) return line.unitCost
-  if (line.kind === 'retail' && product && (product.capacity ?? 0) > 0)
-    return round2(product.purchasePrice / (product.capacity ?? 1))
-  return product?.purchasePrice ?? 0
-}
-
-/** Key a sale line aggregates under — production batches have no product id. */
-const lineKey = (line: SaleLine): string =>
-  line.kind === 'production' ? `prod:${line.productionId ?? line.productName}` : line.productId
-
-/** Aggregate every sale LINE whose sale falls in range, grouped by product (with margin). */
-export const periodSoldProducts = (
-  sales: Sale[],
+/** Every affectation LINE in range, grouped by product. */
+export const periodAffectedProducts = (
+  affectations: Affectation[],
   products: Product[],
   start: Date,
   end: Date,
-): ProductSaleAgg[] => {
+): ProductAffectedAgg[] => {
   const idx = productIndex(products)
-  const map = new Map<string, ProductSaleAgg>()
-  sales
-    .filter((s) => inRange(s.date, start, end))
-    .forEach((s) =>
-      s.lines.forEach((l) => {
-        const key = lineKey(l)
-        const prod = idx.get(l.productId)
-        const category =
-          l.kind === 'production' ? 'Production' : prod?.category ?? '—'
-        const label =
-          l.kind === 'retail' && l.unit ? `${l.productName} (${l.unit})` : l.productName
+  const map = new Map<string, ProductAffectedAgg & { deps: Set<string> }>()
+  affectations
+    .filter((a) => inRange(a.date, start, end))
+    .forEach((a) =>
+      a.lines.forEach((l) => {
         const cur =
-          map.get(key) ??
-          { productId: key, name: label, category, quantity: 0, revenue: 0, cost: 0, gain: 0 }
-        const lineRevenue = l.quantity * l.unitPrice
-        const lineCost = l.quantity * lineUnitCost(l, prod)
-        cur.quantity = round2(cur.quantity + l.quantity)
-        cur.revenue = round2(cur.revenue + lineRevenue)
-        cur.cost = round2(cur.cost + lineCost)
-        cur.gain = round2(cur.revenue - cur.cost)
-        map.set(key, cur)
+          map.get(l.productId) ??
+          {
+            productId: l.productId,
+            name: l.productName,
+            category: idx.get(l.productId)?.category ?? '—',
+            quantity: 0,
+            value: 0,
+            count: 0,
+            departments: 0,
+            deps: new Set<string>(),
+          }
+        cur.quantity += l.quantity
+        cur.value = round2(cur.value + l.quantity * l.unitCost)
+        cur.count += 1
+        cur.deps.add(a.departmentId)
+        cur.departments = cur.deps.size
+        map.set(l.productId, cur)
       }),
     )
-  return [...map.values()].sort((a, b) => b.quantity - a.quantity)
+  return [...map.values()]
+    .map(({ deps: _deps, ...r }) => r)
+    .sort((a, b) => b.quantity - a.quantity)
 }
 
 /**
- * Velocity table over a period: EVERY product, including those never sold,
- * sorted by quantity sold. Lets a view slice fast movers (top) and slow / dead
- * stock (bottom) from one list.
+ * Movement table over a period: EVERY product, including those never handed
+ * out, sorted by quantity affected — fast movers on top, dormant stock below.
  */
-export const productSalesAnalysis = (
-  sales: Sale[],
+export const productAffectationAnalysis = (
+  affectations: Affectation[],
   products: Product[],
   start: Date,
   end: Date,
-): ProductSaleAgg[] => {
-  const sold = new Map(periodSoldProducts(sales, products, start, end).map((r) => [r.productId, r]))
+): ProductAffectedAgg[] => {
+  const moved = new Map(periodAffectedProducts(affectations, products, start, end).map((r) => [r.productId, r]))
   return products
     .map(
       (p) =>
-        sold.get(p.id) ?? {
+        moved.get(p.id) ?? {
           productId: p.id,
           name: p.name,
           category: p.category,
           quantity: 0,
-          revenue: 0,
-          cost: 0,
-          gain: 0,
+          value: 0,
+          count: 0,
+          departments: 0,
         },
     )
-    .sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue)
+    .sort((a, b) => b.quantity - a.quantity || b.value - a.value)
+}
+
+export interface DepartmentAgg {
+  departmentId: string
+  name: string
+  count: number
+  quantity: number
+  value: number
+  lastDate: string | null
+}
+
+/** What each department received over a period. */
+export const departmentBreakdown = (
+  affectations: Affectation[],
+  departments: Department[],
+  start: Date,
+  end: Date,
+): DepartmentAgg[] => {
+  const map = new Map<string, DepartmentAgg>()
+  departments.forEach((d) =>
+    map.set(d.id, { departmentId: d.id, name: d.name, count: 0, quantity: 0, value: 0, lastDate: null }),
+  )
+  affectations
+    .filter((a) => inRange(a.date, start, end))
+    .forEach((a) => {
+      const cur =
+        map.get(a.departmentId) ??
+        { departmentId: a.departmentId, name: a.departmentName, count: 0, quantity: 0, value: 0, lastDate: null }
+      cur.count += 1
+      cur.quantity += a.lines.reduce((s, l) => s + l.quantity, 0)
+      cur.value = round2(cur.value + a.total)
+      if (!cur.lastDate || a.date > cur.lastDate) cur.lastDate = a.date
+      map.set(a.departmentId, cur)
+    })
+  return [...map.values()].sort((a, b) => b.value - a.value)
 }
 
 export interface CategoryAgg {
   category: string
-  qtySold: number
-  salesRevenue: number
-  salesCost: number
-  gain: number
   qtyPurchased: number
   purchasesCost: number
+  qtyAffected: number
+  affectedValue: number
+  /** Units still on the shelves (all-time). */
+  stockQty: number
+  stockValue: number
 }
 
-/** Per-category sales, purchases and realised gain over a date range. */
+/** Per-category purchases, affectations and current stock over a date range. */
 export const categoryBreakdown = (
-  sales: Sale[],
   purchases: Purchase[],
+  affectations: Affectation[],
   products: Product[],
   start: Date,
   end: Date,
 ): CategoryAgg[] => {
   const map = new Map<string, CategoryAgg>()
-  const blank = (category: string): CategoryAgg => ({
-    category,
-    qtySold: 0,
-    salesRevenue: 0,
-    salesCost: 0,
-    gain: 0,
-    qtyPurchased: 0,
-    purchasesCost: 0,
-  })
-
-  periodSoldProducts(sales, products, start, end).forEach((r) => {
-    const cur = map.get(r.category) ?? blank(r.category)
-    cur.qtySold += r.quantity
-    cur.salesRevenue = round2(cur.salesRevenue + r.revenue)
-    cur.salesCost = round2(cur.salesCost + r.cost)
-    cur.gain = round2(cur.salesRevenue - cur.salesCost)
-    map.set(r.category, cur)
-  })
-
+  const get = (category: string): CategoryAgg => {
+    const cur =
+      map.get(category) ??
+      { category, qtyPurchased: 0, purchasesCost: 0, qtyAffected: 0, affectedValue: 0, stockQty: 0, stockValue: 0 }
+    map.set(category, cur)
+    return cur
+  }
   periodPurchasedProducts(purchases, products, start, end).forEach((r) => {
-    const cur = map.get(r.category) ?? blank(r.category)
+    const cur = get(r.category)
     cur.qtyPurchased += r.quantity
     cur.purchasesCost = round2(cur.purchasesCost + r.total)
-    map.set(r.category, cur)
   })
+  periodAffectedProducts(affectations, products, start, end).forEach((r) => {
+    const cur = get(r.category)
+    cur.qtyAffected += r.quantity
+    cur.affectedValue = round2(cur.affectedValue + r.value)
+  })
+  products.forEach((p) => {
+    const cur = get(p.category || '—')
+    cur.stockQty += p.quantity
+    cur.stockValue = round2(cur.stockValue + p.quantity * p.purchasePrice)
+  })
+  return [...map.values()].sort((a, b) => b.affectedValue - a.affectedValue || b.purchasesCost - a.purchasesCost)
+}
 
-  return [...map.values()].sort((a, b) => b.salesRevenue - a.salesRevenue)
+// ----------------------------------------------------------------------------
+// Product history (purchases in, affectations out)
+// ----------------------------------------------------------------------------
+
+export interface ProductMovement {
+  id: string
+  kind: 'purchase' | 'affectation'
+  date: string
+  reference: string
+  /** Supplier name or department name. */
+  party: string
+  quantity: number
+  unitPrice: number
+  total: number
+  note?: string
+}
+
+export const productHistory = (
+  productId: string,
+  purchases: Purchase[],
+  affectations: Affectation[],
+): ProductMovement[] => {
+  const rows: ProductMovement[] = []
+  purchases.forEach((p) =>
+    p.lines
+      .filter((l) => l.productId === productId)
+      .forEach((l, i) =>
+        rows.push({
+          id: `${p.id}-${i}`,
+          kind: 'purchase',
+          date: p.date,
+          reference: p.reference,
+          party: p.supplierName || '—',
+          quantity: l.quantity,
+          unitPrice: l.purchasePrice,
+          total: round2(l.quantity * l.purchasePrice),
+        }),
+      ),
+  )
+  affectations.forEach((a) =>
+    a.lines
+      .filter((l) => l.productId === productId)
+      .forEach((l, i) =>
+        rows.push({
+          id: `${a.id}-${i}`,
+          kind: 'affectation',
+          date: a.date,
+          reference: a.reference,
+          party: a.departmentName,
+          quantity: l.quantity,
+          unitPrice: l.unitCost,
+          total: round2(l.quantity * l.unitCost),
+          note: a.description,
+        }),
+      ),
+  )
+  return rows.sort((a, b) => +new Date(b.date) - +new Date(a.date))
 }
 
 // ----------------------------------------------------------------------------
@@ -634,23 +573,6 @@ export const periodWorkerMovements = (
     totalPayments: round2(payments.reduce((s, x) => s + x.amount, 0)),
     totalAbsences: round2(absences.reduce((s, x) => s + x.amount, 0)),
   }
-}
-
-export interface ClientAgg {
-  clientId: string
-  name: string
-  amount: number
-}
-
-export const topClients = (sales: Sale[], limit = 5): ClientAgg[] => {
-  const map = new Map<string, ClientAgg>()
-  sales.forEach((s) => {
-    if (!s.clientId) return
-    const cur = map.get(s.clientId) ?? { clientId: s.clientId, name: s.clientName, amount: 0 }
-    cur.amount += s.total
-    map.set(s.clientId, cur)
-  })
-  return [...map.values()].sort((a, b) => b.amount - a.amount).slice(0, limit)
 }
 
 /** Compute a worker's payable salary for a given month key (YYYY-MM). */

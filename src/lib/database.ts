@@ -1,34 +1,31 @@
 import { create } from 'zustand'
 import { useProductStore } from '@/store/useProductStore'
-import { useClientStore } from '@/store/useClientStore'
 import { useSupplierStore } from '@/store/useSupplierStore'
 import { usePurchaseStore } from '@/store/usePurchaseStore'
-import { useSalesStore } from '@/store/useSalesStore'
-import { useProductionStore } from '@/store/useProductionStore'
+import { useDepartmentStore } from '@/store/useDepartmentStore'
+import { useAffectationStore } from '@/store/useAffectationStore'
 import { useWorkerStore } from '@/store/useWorkerStore'
 import { useExpenseStore } from '@/store/useExpenseStore'
 import { useCaisseStore } from '@/store/useCaisseStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import type {
+  Affectation,
   CaisseTransaction,
-  Client,
+  Department,
   Expense,
   LocalUser,
   Product,
-  Production,
   Purchase,
-  Sale,
   StoreSettings,
   Supplier,
-  TechSheet,
   Worker,
 } from '@/types'
 
 // ============================================================================
 // Local database
 //
-// The shop is stored on this PC by the Altech POS server (`data/` folder, see
+// The inventory is stored on this PC by the Altech server (`data/` folder, see
 // server/db.mjs). When the page is opened without that server (a plain static
 // host), the same data is kept in the browser's IndexedDB instead.
 //
@@ -45,12 +42,10 @@ export interface Snapshot {
   brands: string[]
   categories: string[]
   units: string[]
-  clients: Client[]
   suppliers: Supplier[]
   purchases: Purchase[]
-  sales: Sale[]
-  sheets: TechSheet[]
-  productions: Production[]
+  departments: Department[]
+  affectations: Affectation[]
   workers: Worker[]
   workerRoles: string[]
   expenses: Expense[]
@@ -103,12 +98,10 @@ const bindings = (): Binding[] => (bindingsCache ??= [
   value('brands', useProductStore, 'brands'),
   value('categories', useProductStore, 'categories'),
   value('units', useProductStore, 'units'),
-  rows('clients', useClientStore, 'clients'),
   rows('suppliers', useSupplierStore, 'suppliers'),
   rows('purchases', usePurchaseStore, 'purchases'),
-  rows('sales', useSalesStore, 'sales'),
-  rows('sheets', useProductionStore, 'sheets'),
-  rows('productions', useProductionStore, 'productions'),
+  rows('departments', useDepartmentStore, 'departments'),
+  rows('affectations', useAffectationStore, 'affectations'),
   rows('workers', useWorkerStore, 'workers'),
   value('workerRoles', useWorkerStore, 'roles'),
   rows('expenses', useExpenseStore, 'expenses'),
@@ -122,8 +115,7 @@ const byDateDesc = (a: any, b: any) => String(b.date ?? '').localeCompare(String
 const byCreatedDesc = (a: any, b: any) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))
 const SORTERS: Partial<Record<keyof Snapshot, (a: any, b: any) => number>> = {
   purchases: byDateDesc,
-  sales: byDateDesc,
-  productions: byDateDesc,
+  affectations: byDateDesc,
   expenses: byDateDesc,
   caisse: byDateDesc,
 }
@@ -229,7 +221,7 @@ const serverBackend: Backend = {
 
 /** IndexedDB fallback — the whole database under one key. */
 const browserBackend = (): Backend => {
-  const DB_NAME = 'altech-pos'
+  const DB_NAME = 'altech-inventory'
   const KEY = 'db'
   let doc: { rev: number; tables: Record<string, Record<string, unknown>>; values: Record<string, unknown> } = {
     rev: 0,
@@ -458,24 +450,26 @@ const readLegacyBrowserData = (): Partial<Snapshot> | null => {
     brands: products?.brands ?? [],
     categories: products?.categories ?? [],
     units: products?.units ?? [],
-    clients: readLegacy('cosmetics-clients-v1')?.clients ?? [],
     suppliers: readLegacy('cosmetics-suppliers-v1')?.suppliers ?? [],
     purchases: readLegacy('cosmetics-purchases-v1')?.purchases ?? [],
-    sales: readLegacy('cosmetics-sales-v1')?.sales ?? [],
     workers: workers?.workers ?? [],
     workerRoles: workers?.roles ?? [],
     expenses: readLegacy('cosmetics-expenses-v1')?.expenses ?? [],
     caisse: readLegacy('cosmetics-caisse')?.transactions ?? [],
     settings: readLegacy('cosmetics-settings-v1')?.settings,
   }
-  const hasData = ['products', 'clients', 'purchases', 'sales', 'workers', 'expenses'].some(
+  const hasData = ['products', 'purchases', 'workers', 'expenses'].some(
     (k) => ((legacy as any)[k] ?? []).length > 0,
   )
   return hasData ? legacy : null
 }
 
 const isEmpty = (s: Snapshot) =>
-  s.products.length === 0 && s.sales.length === 0 && s.purchases.length === 0 && s.clients.length === 0 && s.users.length === 0
+  s.products.length === 0 &&
+  s.purchases.length === 0 &&
+  s.departments.length === 0 &&
+  s.affectations.length === 0 &&
+  s.users.length === 0
 
 // ----------------------------------------------------------------------------
 // Boot / restore
@@ -522,6 +516,14 @@ export const initDatabase = async (): Promise<void> => {
       knownRev = rev
       localStorage.setItem('altech-legacy-imported', new Date().toISOString())
     }
+  }
+
+  // Demo version: an empty database starts filled with the demonstration data.
+  if (isEmpty(snapshot)) {
+    const { buildDemoSnapshot } = await import('@/data/demoData')
+    snapshot = normaliseSnapshot(buildDemoSnapshot())
+    const { rev } = await backend.replace(snapshotToDoc(snapshot))
+    knownRev = rev
   }
 
   applySnapshot(snapshot)

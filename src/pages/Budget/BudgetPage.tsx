@@ -19,13 +19,11 @@ import {
   Landmark,
   Wallet,
   Boxes,
-  Users,
   Truck,
   ArrowDownCircle,
   ArrowUpCircle,
   TrendingUp,
   ShoppingCart,
-  BadgeDollarSign,
   HardHat,
   Pencil,
   Trash2,
@@ -37,8 +35,8 @@ import {
   HandCoins,
   Receipt,
   Layers,
-  FlaskConical,
-  Beaker,
+  Building2,
+  ClipboardList,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -58,26 +56,23 @@ import { Input, Textarea, Select } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useCaisseStore } from '@/store/useCaisseStore'
-import { useSalesStore } from '@/store/useSalesStore'
 import { usePurchaseStore } from '@/store/usePurchaseStore'
 import { useExpenseStore } from '@/store/useExpenseStore'
 import { useWorkerStore } from '@/store/useWorkerStore'
 import { useProductStore } from '@/store/useProductStore'
-import { useProductionStore } from '@/store/useProductionStore'
+import { useAffectationStore } from '@/store/useAffectationStore'
+import { useDepartmentStore } from '@/store/useDepartmentStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import {
-  caissePeriodStats,
-  storeWealth,
+  budgetPeriodStats,
+  orgWealth,
   categoryBreakdown,
-  periodSoldProducts,
+  periodAffectedProducts,
   periodPurchasedProducts,
   periodWorkerMovements,
-  periodProductions,
-  productionStats,
-  periodProductionComponents,
+  departmentBreakdown,
 } from '@/utils/calculations'
 import { formatMoney } from '@/utils/helpers'
-import { isDivisible, totalContent } from '@/utils/retail'
 import { cardVariants, fadeUp, staggerContainer } from '@/utils/animations'
 import type { CaisseTransaction, CaisseType } from '@/types'
 
@@ -121,17 +116,17 @@ const MiniTable = ({ head, rows, empty }: { head: string[]; rows: ReactNode[][];
     </div>
   )
 
-export const CaissePage = () => {
+export const BudgetPage = () => {
   const { t } = useTranslation()
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useCaisseStore()
-  const sales = useSalesStore((s) => s.sales)
   const purchases = usePurchaseStore((s) => s.purchases)
   const expenses = useExpenseStore((s) => s.expenses)
   const workers = useWorkerStore((s) => s.workers)
   const products = useProductStore((s) => s.products)
-  const productions = useProductionStore((s) => s.productions)
+  const affectations = useAffectationStore((s) => s.affectations)
+  const departments = useDepartmentStore((s) => s.departments)
 
-  const [period, setPeriod] = useState<PeriodKey>('today')
+  const [period, setPeriod] = useState<PeriodKey>('year')
   const [customFrom, setCustomFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [customTo, setCustomTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [moveFilter, setMoveFilter] = useState<'all' | CaisseType>('all')
@@ -168,13 +163,13 @@ export const CaissePage = () => {
   }, [period, customFrom, customTo, t])
 
   const wealth = useMemo(
-    () => storeWealth(transactions, sales, purchases, expenses, workers, products, productions),
-    [transactions, sales, purchases, expenses, workers, products, productions],
+    () => orgWealth(transactions, purchases, expenses, workers, products, affectations),
+    [transactions, purchases, expenses, workers, products, affectations],
   )
 
   const stats = useMemo(
-    () => caissePeriodStats(transactions, sales, purchases, expenses, workers, start, end),
-    [transactions, sales, purchases, expenses, workers, start, end],
+    () => budgetPeriodStats(transactions, purchases, expenses, workers, affectations, start, end),
+    [transactions, purchases, expenses, workers, affectations, start, end],
   )
 
   const periodTransactions = useMemo(
@@ -192,7 +187,6 @@ export const CaissePage = () => {
 
   const chartData = useMemo(
     () => [
-      { name: t('sales'), value: stats.salesCollected, kind: 'in' as const },
       { name: t('deposit'), value: stats.deposits, kind: 'in' as const },
       { name: t('purchase'), value: stats.purchasesPaid, kind: 'out' as const },
       { name: t('expenses'), value: stats.expenses, kind: 'out' as const },
@@ -202,18 +196,22 @@ export const CaissePage = () => {
     [stats, t],
   )
 
-  // ---- Detailed period ledger (every small movement of the store) ----------
+  // ---- Detailed period ledger (every small movement of the organisation) --
   const catRows = useMemo(
-    () => categoryBreakdown(sales, purchases, products, start, end),
-    [sales, purchases, products, start, end],
+    () => categoryBreakdown(purchases, affectations, products, start, end),
+    [purchases, affectations, products, start, end],
   )
-  const soldRows = useMemo(
-    () => periodSoldProducts(sales, products, start, end),
-    [sales, products, start, end],
+  const affectedRows = useMemo(
+    () => periodAffectedProducts(affectations, products, start, end),
+    [affectations, products, start, end],
   )
   const purchasedRows = useMemo(
     () => periodPurchasedProducts(purchases, products, start, end),
     [purchases, products, start, end],
+  )
+  const depRows = useMemo(
+    () => departmentBreakdown(affectations, departments, start, end).filter((d) => d.count > 0),
+    [affectations, departments, start, end],
   )
   const periodExpenses = useMemo(
     () =>
@@ -224,36 +222,12 @@ export const CaissePage = () => {
   )
   const workerMov = useMemo(() => periodWorkerMovements(workers, start, end), [workers, start, end])
 
-  // ---- Production of the period -------------------------------------------
-  const periodBatches = useMemo(() => periodProductions(productions, start, end), [productions, start, end])
-  const prodStats = useMemo(() => productionStats(periodBatches), [periodBatches])
-  const prodComponents = useMemo(
-    () => periodProductionComponents(productions, start, end),
-    [productions, start, end],
-  )
-  /** Divisible articles and what is left in the container opened at the counter. */
-  const retailRows = useMemo(
-    () =>
-      products
-        .filter(isDivisible)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          unit: p.unit ?? '',
-          containers: p.quantity,
-          open: p.openRemaining ?? 0,
-          content: totalContent(p),
-        }))
-        .sort((a, b) => b.content - a.content),
-    [products],
-  )
-
-  const soldFiltered = catFilter === 'all' ? soldRows : soldRows.filter((r) => r.category === catFilter)
+  const affectedFiltered = catFilter === 'all' ? affectedRows : affectedRows.filter((r) => r.category === catFilter)
   const purchasedFiltered = catFilter === 'all' ? purchasedRows : purchasedRows.filter((r) => r.category === catFilter)
-  const totalGain = soldFiltered.reduce((s, r) => s + r.gain, 0)
-  const totalSoldRevenue = soldFiltered.reduce((s, r) => s + r.revenue, 0)
+  const totalAffectedValue = affectedFiltered.reduce((s, r) => s + r.value, 0)
   const totalPurchasedCost = purchasedFiltered.reduce((s, r) => s + r.total, 0)
-  const totalUnitsSold = soldFiltered.reduce((s, r) => s + r.quantity, 0)
+  const totalUnitsAffected = affectedFiltered.reduce((s, r) => s + r.quantity, 0)
+  const consumption = stats.cashIn > 0 ? Math.min(100, (stats.cashOut / stats.cashIn) * 100) : 0
 
   const periods: { key: PeriodKey; label: string }[] = [
     { key: 'today', label: t('today') },
@@ -295,10 +269,10 @@ export const CaissePage = () => {
     {
       icon: <Landmark size={22} />,
       label: t('caisseBalance'),
-      value: wealth.caisseBalance,
+      value: wealth.budgetBalance,
       suffix: 'DA',
       decimals: true,
-      accent: wealth.caisseBalance >= 0 ? 'from-sage to-emerald-500' : 'from-terracotta to-rose-600',
+      accent: wealth.budgetBalance >= 0 ? 'from-sage to-emerald-500' : 'from-terracotta to-rose-600',
       hint: t('caisseSubtitle'),
     },
     {
@@ -320,19 +294,19 @@ export const CaissePage = () => {
       hint: t('stockValue'),
     },
     {
-      icon: <Users size={22} />,
-      label: t('clientReceivables'),
-      value: wealth.clientReceivables,
+      icon: <Truck size={22} />,
+      label: t('supplierPayables'),
+      value: wealth.supplierPayables,
       suffix: 'DA',
       decimals: true,
       accent: 'from-wood-warm to-gold',
-      hint: <span className="inline-flex items-center gap-1 text-terracotta"><Truck size={12} /> {t('supplierPayables')}: {formatMoney(wealth.supplierPayables)}</span>,
+      hint: <span className="inline-flex items-center gap-1"><ClipboardList size={12} /> {t('affectedValue')}: {formatMoney(wealth.affectedValue)}</span>,
     },
   ]
 
   // Detailed period calculation cards
   const detailCards = [
-    { icon: <BadgeDollarSign size={20} />, label: t('sales'), value: stats.salesTotal, sub: `${t('collected')}: ${formatMoney(stats.salesCollected)}`, tone: 'sage', accent: 'from-sage to-emerald-500' },
+    { icon: <ClipboardList size={20} />, label: t('affectations'), value: stats.affectedValue, sub: t('affectedValue'), tone: 'sage', accent: 'from-sky-500 to-indigo-600' },
     { icon: <ShoppingCart size={20} />, label: t('purchase'), value: stats.purchasesTotal, sub: `${t('paid')}: ${formatMoney(stats.purchasesPaid)}`, tone: 'wood', accent: 'from-wood-warm to-gold' },
     { icon: <Wallet size={20} />, label: t('expenses'), value: stats.expenses, sub: t('periodDetails'), tone: 'terracotta', accent: 'from-terracotta to-rose-600' },
     { icon: <HardHat size={20} />, label: t('salariesPaid'), value: stats.salaries, sub: t('periodDetails'), tone: 'gold', accent: 'from-gold to-gold-light' },
@@ -342,7 +316,6 @@ export const CaissePage = () => {
 
   // Cash breakdown (waterfall) rows for the selected period
   const breakdown = [
-    { label: `${t('collected')} — ${t('sales')}`, value: stats.salesCollected, positive: true },
     { label: t('depositsTotal'), value: stats.deposits, positive: true },
     { label: `${t('paid')} — ${t('purchase')}`, value: -stats.purchasesPaid, positive: false },
     { label: t('expenses'), value: -stats.expenses, positive: false },
@@ -353,8 +326,8 @@ export const CaissePage = () => {
   return (
     <motion.div variants={staggerContainer} initial="initial" animate="animate">
       <PageHeader
-        title={t('caisse')}
-        subtitle={t('caisseSubtitle')}
+        title={t('budget')}
+        subtitle={t('budgetSubtitle')}
         actions={
           <>
             <Button variant="sage" onClick={() => openNew('deposit')}><Plus size={18} />{t('newDeposit')}</Button>
@@ -497,7 +470,7 @@ export const CaissePage = () => {
             <Tags size={18} className="text-wood-warm" />
             <h3 className="text-display text-lg font-bold text-wood-dark">{t('categoryAnalysis')}</h3>
           </div>
-          <Badge tone="gold">{t('totalGain')}: {formatMoney(catRows.reduce((s, r) => s + r.gain, 0))}</Badge>
+          <Badge tone="gold">{t('stockValue')}: {formatMoney(catRows.reduce((s, r) => s + r.stockValue, 0))}</Badge>
         </div>
         {catRows.length === 0 ? (
           <p className="py-6 text-center text-sm text-wood-medium">{t('noData')}</p>
@@ -509,8 +482,8 @@ export const CaissePage = () => {
             >
               <span className="flex items-center gap-1.5 font-semibold text-wood-dark"><Layers size={14} className="text-wood-warm" />{t('allCategories')}</span>
               <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
-                <span className="text-wood-medium">{t('sales')}: <b className="text-mono text-wood-dark">{formatMoney(catRows.reduce((s, r) => s + r.salesRevenue, 0))}</b></span>
-                <span className="text-wood-medium">{t('netProfit')}: <b className="text-mono text-sage">{formatMoney(catRows.reduce((s, r) => s + r.gain, 0))}</b></span>
+                <span className="text-wood-medium">{t('purchase')}: <b className="text-mono text-wood-dark">{formatMoney(catRows.reduce((s, r) => s + r.purchasesCost, 0))}</b></span>
+                <span className="text-wood-medium">{t('affectations')}: <b className="text-mono text-sage">{formatMoney(catRows.reduce((s, r) => s + r.affectedValue, 0))}</b></span>
               </div>
             </button>
             {catRows.map((c) => (
@@ -521,13 +494,13 @@ export const CaissePage = () => {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-1.5 font-semibold text-wood-dark"><Layers size={14} className="shrink-0 text-wood-warm" /><span className="truncate">{c.category}</span></span>
-                  <span className={`text-mono shrink-0 text-sm font-bold ${c.gain >= 0 ? 'text-sage' : 'text-terracotta'}`}>{c.gain >= 0 ? '+' : ''}{formatMoney(c.gain)}</span>
+                  <span className="text-mono shrink-0 text-sm font-bold text-sage">{formatMoney(c.affectedValue)}</span>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
-                  <span className="text-wood-medium">{t('sales')}: <b className="text-mono text-wood-dark">{formatMoney(c.salesRevenue)}</b></span>
                   <span className="text-wood-medium">{t('purchase')}: <b className="text-mono text-wood-dark">{formatMoney(c.purchasesCost)}</b></span>
-                  <span className="text-wood-medium">{t('qtySold')}: <b className="text-mono text-wood-dark">{c.qtySold}</b></span>
+                  <span className="text-wood-medium">{t('stockValue')}: <b className="text-mono text-wood-dark">{formatMoney(c.stockValue)}</b></span>
                   <span className="text-wood-medium">{t('qtyPurchased')}: <b className="text-mono text-wood-dark">{c.qtyPurchased}</b></span>
+                  <span className="text-wood-medium">{t('affectedQty')}: <b className="text-mono text-wood-dark">{c.qtyAffected}</b></span>
                 </div>
               </button>
             ))}
@@ -538,23 +511,23 @@ export const CaissePage = () => {
       {/* Products sold + purchased (filtered by selected category) */}
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel
-          title={t('productsSold')}
-          icon={<BadgeDollarSign size={18} className="text-sage" />}
+          title={t('affectationsOut')}
+          icon={<ClipboardList size={18} className="text-sage" />}
           action={<Badge tone={catFilter === 'all' ? 'gold' : 'sage'}>{catFilter === 'all' ? t('allCategories') : catFilter}</Badge>}
         >
           <MiniTable
-            head={[t('productName'), t('qtySold'), t('sales'), t('margin')]}
-            rows={soldFiltered.map((r) => [
+            head={[t('productName'), t('affectedQty'), t('departments'), t('value')]}
+            rows={affectedFiltered.map((r) => [
               <span key="n">{r.name}<span className="ms-1 text-[10px] text-wood-medium/60">· {r.category}</span></span>,
               r.quantity,
-              formatMoney(r.revenue),
-              <span key="g" className={r.gain >= 0 ? 'text-sage' : 'text-terracotta'}>{r.gain >= 0 ? '+' : ''}{formatMoney(r.gain)}</span>,
+              r.departments,
+              formatMoney(r.value),
             ])}
-            empty={t('noSales')}
+            empty={t('noAffectations')}
           />
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-sage/10 px-3 py-2 text-sm">
-            <span className="text-wood-medium">{t('unitsSold')}: <b className="text-mono text-wood-dark">{totalUnitsSold}</b></span>
-            <span className="text-mono font-bold text-sage">{formatMoney(totalSoldRevenue)} · {t('netProfit')} {totalGain >= 0 ? '+' : ''}{formatMoney(totalGain)}</span>
+            <span className="text-wood-medium">{t('units')}: <b className="text-mono text-wood-dark">{totalUnitsAffected}</b></span>
+            <span className="text-mono font-bold text-sage">{formatMoney(totalAffectedValue)}</span>
           </div>
         </Panel>
 
@@ -579,26 +552,47 @@ export const CaissePage = () => {
         </Panel>
       </div>
 
-      {/* Retail articles — how many containers and what is left in the open one */}
-      {retailRows.length > 0 && (
-        <motion.div variants={fadeUp} className="card-wood mt-5 rounded-xl p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <Beaker size={18} className="text-wood-warm" />
-            <h3 className="text-display text-lg font-bold text-wood-dark">{t('retailProducts')}</h3>
-            <Badge tone="gold" className="ms-auto">{retailRows.length}</Badge>
-          </div>
+      {/* Departments served over the period + budget consumption */}
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Panel title={t('departmentAnalysis')} icon={<Building2 size={18} className="text-wood-warm" />} className="lg:col-span-2">
           <MiniTable
-            head={[t('productName'), t('containers'), t('openContainer'), t('totalContent')]}
-            rows={retailRows.map((r) => [
-              r.name,
-              r.containers,
-              `${r.open} ${r.unit}`,
-              `${r.content} ${r.unit}`,
-            ])}
-            empty={t('noData')}
+            head={[t('department'), t('affectations'), t('units'), t('value')]}
+            rows={depRows.map((d) => [d.name, d.count, d.quantity, formatMoney(d.value)])}
+            empty={t('noAffectations')}
           />
-        </motion.div>
-      )}
+        </Panel>
+        <Panel title={t('budgetConsumption')} icon={<Scale size={18} className="text-wood-warm" />}>
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div className="relative h-36 w-36">
+              <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3.5" className="text-wood-cream" />
+                <motion.circle
+                  cx="18" cy="18" r="15.9" fill="none" strokeWidth="3.5" strokeLinecap="round"
+                  stroke="url(#budgetGrad)"
+                  initial={{ strokeDasharray: '0 100' }}
+                  animate={{ strokeDasharray: `${consumption} 100` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                />
+                <defs>
+                  <linearGradient id="budgetGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#2F5BFF" />
+                    <stop offset="100%" stopColor="#00B8D9" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-mono text-2xl font-bold text-wood-dark">{consumption.toFixed(0)}%</span>
+                <span className="text-[10px] text-wood-medium">{t('consumptionRate')}</span>
+              </div>
+            </div>
+            <div className="w-full space-y-1 text-xs">
+              <div className="flex justify-between"><span className="text-wood-medium">{t('allocationsTotal')}</span><b className="text-mono text-sage">{formatMoney(stats.cashIn)}</b></div>
+              <div className="flex justify-between"><span className="text-wood-medium">{t('cashOut')}</span><b className="text-mono text-terracotta">{formatMoney(stats.cashOut)}</b></div>
+              <div className="flex justify-between"><span className="text-wood-medium">{t('affectedValue')}</span><b className="text-mono text-wood-dark">{formatMoney(stats.affectedValue)}</b></div>
+            </div>
+          </div>
+        </Panel>
+      </div>
 
       {/* Expenses + worker movements ledger */}
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">

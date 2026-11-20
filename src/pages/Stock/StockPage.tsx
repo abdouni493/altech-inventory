@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Coins,
   Package,
+  History,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { PageHeader, SearchInput, EmptyState, ViewToggle, ProgressBar } from '@/components/ui/Misc'
@@ -23,6 +24,7 @@ import { Select } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ProductModal } from './ProductModal'
+import { ProductHistoryModal } from './ProductHistoryModal'
 import { Barcode } from '@/components/shared/BarcodeGenerator'
 import { useProductStore } from '@/store/useProductStore'
 import { useTranslation } from '@/i18n/useTranslation'
@@ -199,6 +201,7 @@ export const StockPage = () => {
   const [editing, setEditing] = useState<Product | null>(null)
   const [viewing, setViewing] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState<Product | null>(null)
+  const [historyOf, setHistoryOf] = useState<Product | null>(null)
 
   const filtered = useMemo(
     () =>
@@ -374,8 +377,11 @@ export const StockPage = () => {
                 <RetailStock product={p} />
 
                 <div className="mt-4 flex gap-2 border-t border-wood-light/20 pt-3">
-                  <Button size="sm" variant="outline" className="flex-1" onClick={() => setViewing(p)}>
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => setViewing(p)} title={t('view')}>
                     <Eye size={15} />
+                  </Button>
+                  <Button size="sm" variant="gold" className="flex-1" onClick={() => setHistoryOf(p)} title={t('productHistory')}>
+                    <History size={15} />
                   </Button>
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(p)}>
                     <Pencil size={15} />
@@ -438,7 +444,8 @@ export const StockPage = () => {
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex justify-center gap-1">
-                        <button onClick={() => setViewing(p)} className="rounded-lg p-1.5 text-wood-medium hover:bg-wood-cream"><Eye size={16} /></button>
+                        <button onClick={() => setViewing(p)} title={t('view')} className="rounded-lg p-1.5 text-wood-medium hover:bg-wood-cream"><Eye size={16} /></button>
+                        <button onClick={() => setHistoryOf(p)} title={t('productHistory')} className="rounded-lg p-1.5 text-[#B45309] hover:bg-gold/10"><History size={16} /></button>
                         <button onClick={() => openEdit(p)} className="rounded-lg p-1.5 text-wood-warm hover:bg-wood-cream"><Pencil size={16} /></button>
                         <button onClick={() => setDeleting(p)} className="rounded-lg p-1.5 text-terracotta hover:bg-terracotta/10"><Trash2 size={16} /></button>
                       </div>
@@ -452,6 +459,7 @@ export const StockPage = () => {
       )}
 
       <ProductModal open={modalOpen} onClose={() => setModalOpen(false)} product={editing} />
+      <ProductHistoryModal product={historyOf} onClose={() => setHistoryOf(null)} />
 
       {/* View modal */}
       <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing?.name} subtitle={`${viewing?.brand} · ${viewing?.category}`} size="md">

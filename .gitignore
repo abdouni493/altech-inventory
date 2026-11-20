@@ -13,7 +13,7 @@ vite.config.js
 vite.config.d.ts
 
 # Local database (shop data, backups, server logs) — never committed
-data/
+/data/
 
 # Environment variables
 .env

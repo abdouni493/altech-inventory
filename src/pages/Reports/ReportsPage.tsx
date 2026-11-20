@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useReactToPrint } from 'react-to-print'
-import { format, startOfMonth } from 'date-fns'
+import { format, startOfYear } from 'date-fns'
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,70 +15,90 @@ import {
   Cell,
   Legend,
 } from 'recharts'
-import { BarChart3, Printer, Loader2, TrendingUp, TrendingDown, ShoppingCart, Wallet, HardHat, Boxes, Users, Tags, Landmark, Percent, FlaskConical, Beaker } from 'lucide-react'
+import {
+  BarChart3,
+  Printer,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  ShoppingCart,
+  Wallet,
+  HardHat,
+  Boxes,
+  Tags,
+  Landmark,
+  ClipboardList,
+  Building2,
+  Coins,
+  Package,
+  Truck,
+  CalendarX,
+} from 'lucide-react'
 import { PageHeader } from '@/components/ui/Misc'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { useSalesStore } from '@/store/useSalesStore'
 import { usePurchaseStore } from '@/store/usePurchaseStore'
 import { useExpenseStore } from '@/store/useExpenseStore'
 import { useWorkerStore } from '@/store/useWorkerStore'
 import { useProductStore } from '@/store/useProductStore'
-import { useClientStore } from '@/store/useClientStore'
 import { useSupplierStore } from '@/store/useSupplierStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useCaisseStore } from '@/store/useCaisseStore'
-import { useProductionStore } from '@/store/useProductionStore'
+import { useAffectationStore } from '@/store/useAffectationStore'
+import { useDepartmentStore } from '@/store/useDepartmentStore'
 import { useTranslation } from '@/i18n/useTranslation'
-import { formatMoney, round2 } from '@/utils/helpers'
-import { isDivisible, totalContent, contentUnitPrice } from '@/utils/retail'
+import { formatMoney, round2, expiryInfo } from '@/utils/helpers'
 import {
-  sumSales,
   sumPurchases,
   sumExpenses,
   sumSalaries,
-  topProducts,
-  topClients,
-  clientStats,
   supplierStats,
   remaining,
-  caissePeriodStats,
+  budgetPeriodStats,
+  orgWealth,
   categoryBreakdown,
-  periodSoldProducts,
-  productSalesAnalysis,
-  periodProductions,
-  productionStats,
-  periodProductionComponents,
-  productionRemaining,
-  productionUnitCost,
+  periodAffectedProducts,
+  periodPurchasedProducts,
+  productAffectationAnalysis,
+  departmentBreakdown,
+  periodWorkerMovements,
+  stockValueOf,
 } from '@/utils/calculations'
 
 const CAT_COLORS = ['#2F5BFF', '#00B8D9', '#6366F1', '#0EA5E9', '#F5A524', '#12B76A', '#14B8A6', '#F97316', '#64748B']
 
-const SummaryCard = ({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) => (
+const SummaryCard = ({ label, value, color, icon, money = true }: { label: string; value: number; color: string; icon: React.ReactNode; money?: boolean }) => (
   <div className="card-wood rounded-xl p-4">
-    <div className="flex items-center justify-between">
-      <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-white ${color}`}>{icon}</div>
-    </div>
+    <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-white ${color}`}>{icon}</div>
     <p className="mt-3 text-xs text-wood-medium">{label}</p>
-    <p className="text-mono text-xl font-bold text-wood-dark">{formatMoney(value)}</p>
+    <p className="text-mono text-xl font-bold text-wood-dark">{money ? formatMoney(value) : value.toLocaleString('fr-FR')}</p>
   </div>
+)
+
+const Section = ({ title, icon, children, extra }: { title: string; icon: React.ReactNode; children: React.ReactNode; extra?: React.ReactNode }) => (
+  <section className="card-wood break-inside-avoid rounded-xl p-5">
+    <h2 className="mb-4 flex flex-wrap items-center gap-2 text-display text-lg font-bold text-wood-dark">
+      {icon}
+      {title}
+      {extra && <span className="ms-auto text-sm font-normal">{extra}</span>}
+    </h2>
+    {children}
+  </section>
 )
 
 export const ReportsPage = () => {
   const { t } = useTranslation()
-  const sales = useSalesStore((s) => s.sales)
   const purchases = usePurchaseStore((s) => s.purchases)
   const expenses = useExpenseStore((s) => s.expenses)
   const workers = useWorkerStore((s) => s.workers)
   const products = useProductStore((s) => s.products)
-  const clients = useClientStore((s) => s.clients)
   const suppliers = useSupplierStore((s) => s.suppliers)
   const settings = useSettingsStore((s) => s.settings)
   const transactions = useCaisseStore((s) => s.transactions)
-  const productions = useProductionStore((s) => s.productions)
+  const affectations = useAffectationStore((s) => s.affectations)
+  const departments = useDepartmentStore((s) => s.departments)
 
-  const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
+  const [from, setFrom] = useState(format(startOfYear(new Date()), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [loading, setLoading] = useState(false)
   const [report, setReport] = useState<ReturnType<typeof buildReport> | null>(null)
@@ -86,88 +106,73 @@ export const ReportsPage = () => {
   const handlePrint = useReactToPrint({ content: () => printRef.current })
 
   function buildReport() {
-    const start = new Date(from)
-    const end = new Date(to + 'T23:59:59')
+    const start = new Date(`${from}T00:00:00`)
+    const end = new Date(`${to}T23:59:59`)
     const inRange = (d: string) => new Date(d) >= start && new Date(d) <= end
 
-    const periodSales = sales.filter((s) => inRange(s.date))
-    const periodPurchases = purchases.filter((p) => inRange(p.date))
-    const periodExpenses = expenses.filter((e) => inRange(e.date))
+    const periodPurchases = purchases.filter((p) => inRange(p.date)).sort((a, b) => +new Date(b.date) - +new Date(a.date))
+    const periodExpenses = expenses.filter((e) => inRange(e.date)).sort((a, b) => +new Date(b.date) - +new Date(a.date))
+    const periodAffectations = affectations.filter((a) => inRange(a.date)).sort((a, b) => +new Date(b.date) - +new Date(a.date))
+    const periodBudget = transactions.filter((x) => inRange(x.date)).sort((a, b) => +new Date(b.date) - +new Date(a.date))
 
-    const totalSales = sumSales(sales, start, end)
     const totalPurchases = sumPurchases(purchases, start, end)
     const totalExpenses = sumExpenses(expenses, start, end)
     const totalSalaries = sumSalaries(workers, start, end)
+    const budget = budgetPeriodStats(transactions, purchases, expenses, workers, affectations, start, end)
+    const wealth = orgWealth(transactions, purchases, expenses, workers, products, affectations)
 
-    // Product margin / velocity analysis over the period
-    const soldProducts = periodSoldProducts(sales, products, start, end)
-    const grossMargin = soldProducts.reduce((s, r) => s + r.gain, 0)
-    const cogs = soldProducts.reduce((s, r) => s + r.cost, 0)
-    const unitsSold = soldProducts.reduce((s, r) => s + r.quantity, 0)
-    const velocity = productSalesAnalysis(sales, products, start, end)
-    const bestSellers = velocity.filter((r) => r.quantity > 0).slice(0, 8)
-    const slowMovers = [...velocity].sort((a, b) => a.quantity - b.quantity).slice(0, 8)
-    const cats = categoryBreakdown(sales, purchases, products, start, end)
-    const caisse = caissePeriodStats(transactions, sales, purchases, expenses, workers, start, end)
-    const marginPct = totalSales > 0 ? (grossMargin / totalSales) * 100 : 0
+    const affected = periodAffectedProducts(affectations, products, start, end)
+    const movement = productAffectationAnalysis(affectations, products, start, end)
+    const mostAffected = movement.filter((r) => r.quantity > 0).slice(0, 10)
+    const dormant = [...movement].filter((r) => (products.find((p) => p.id === r.productId)?.quantity ?? 0) > 0).sort((a, b) => a.quantity - b.quantity).slice(0, 10)
+    const purchased = periodPurchasedProducts(purchases, products, start, end)
+    const deps = departmentBreakdown(affectations, departments, start, end)
+    const cats = categoryBreakdown(purchases, affectations, products, start, end)
+    const workerMov = periodWorkerMovements(workers, start, end)
 
-    // Production of the period + the raw material it consumed
-    const periodBatches = periodProductions(productions, start, end)
-    const prod = productionStats(periodBatches)
-    const prodComponents = periodProductionComponents(productions, start, end)
+    const unitsAffected = affected.reduce((s, r) => s + r.quantity, 0)
+    const unitsPurchased = purchased.reduce((s, r) => s + r.quantity, 0)
+    const totalSpent = round2(budget.purchasesPaid + totalExpenses + totalSalaries + budget.withdrawals)
 
-    // Every retail article and the exact state of its containers
-    const retail = products.filter(isDivisible).map((p) => ({
-      id: p.id,
-      name: p.name,
-      unit: p.unit ?? '',
-      containers: p.quantity,
-      open: round2(p.openRemaining ?? 0),
-      content: totalContent(p),
-      perUnit: contentUnitPrice(p),
-      portion: `${p.retailStep ?? 0} ${p.unit ?? ''} = ${formatMoney(p.retailPrice ?? 0)}`,
-    }))
-
-    // Retail portions and finished articles sold, isolated from normal lines
-    const retailSold = periodSales.flatMap((s) =>
-      s.lines.filter((l) => l.kind === 'retail').map((l) => ({ ...l, reference: s.reference, date: s.date })),
-    )
-    const productionSold = periodSales.flatMap((s) =>
-      s.lines.filter((l) => l.kind === 'production').map((l) => ({ ...l, reference: s.reference, date: s.date })),
-    )
+    const stockRows = [...products]
+      .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+      .map((p) => {
+        const exp = p.hasExpiration && p.expirationDate ? expiryInfo(p.expirationDate) : null
+        return {
+          ...p,
+          value: round2(p.quantity * p.purchasePrice),
+          status: p.quantity <= 0 ? t('outOfStock') : p.quantity <= p.minQuantity ? t('lowStock') : t('inStock'),
+          expiry: exp ? `${format(new Date(p.expirationDate!), 'dd/MM/yyyy')}${exp.status === 'expired' ? ' ⚠' : ''}` : '—',
+        }
+      })
 
     return {
       start,
       end,
-      totalSales,
       totalPurchases,
       totalExpenses,
       totalSalaries,
-      netProfit: totalSales - totalPurchases - totalExpenses - totalSalaries,
-      periodSales,
+      totalSpent,
+      budget,
+      wealth,
       periodPurchases,
       periodExpenses,
-      topProducts: topProducts(periodSales, 10),
-      topClients: topClients(periodSales, 10),
-      soldProducts,
-      grossMargin,
-      cogs,
-      unitsSold,
-      marginPct,
-      bestSellers,
-      slowMovers,
+      periodAffectations,
+      periodBudget,
+      affected,
+      mostAffected,
+      dormant,
+      purchased,
+      deps,
       cats,
-      caisse,
-      periodBatches,
-      prod,
-      prodComponents,
-      retail,
-      retailSold,
-      productionSold,
-      clientDebts: clients.map((c) => ({ ...c, ...clientStats(c.id, sales) })).filter((c) => c.totalDebt > 0),
+      workerMov,
+      unitsAffected,
+      unitsPurchased,
+      stockRows,
+      stockValue: stockValueOf(products),
       supplierDebts: suppliers.map((s) => ({ ...s, ...supplierStats(s.id, purchases) })).filter((s) => s.totalDebt > 0),
       lowStock: products.filter((p) => p.quantity <= p.minQuantity),
-      salaryPayments: workers.flatMap((w) => w.payments.filter((p) => inRange(p.date)).map((p) => ({ ...p, worker: w.fullName }))),
+      expired: products.filter((p) => p.hasExpiration && p.expirationDate && expiryInfo(p.expirationDate)?.status !== 'ok'),
     }
   }
 
@@ -177,7 +182,7 @@ export const ReportsPage = () => {
     setTimeout(() => {
       setReport(buildReport())
       setLoading(false)
-    }, 700)
+    }, 500)
   }
 
   return (
@@ -209,212 +214,236 @@ export const ReportsPage = () => {
           <motion.div key="report" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} ref={printRef} className="print-area space-y-6">
             {/* Print header */}
             <div className="hidden print:block">
-              <h1 className="text-display text-2xl font-bold text-wood-dark">{settings.name}</h1>
+              <h1 className="text-display text-2xl font-bold text-wood-dark">{settings.name || t('appName')}</h1>
               <p className="text-sm text-wood-medium">{t('reports')} — {format(report.start, 'dd/MM/yyyy')} → {format(report.end, 'dd/MM/yyyy')}</p>
             </div>
 
-            {/* Financial summary */}
+            {/* Summary */}
             <section>
               <h2 className="mb-3 text-display text-xl font-bold text-wood-dark">{t('financialSummary')}</h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                <SummaryCard label={t('totalSales')} value={report.totalSales} color="bg-sage" icon={<TrendingUp size={18} />} />
+                <SummaryCard label={t('affectations')} value={report.periodAffectations.length} money={false} color="bg-wood-btn" icon={<ClipboardList size={18} />} />
+                <SummaryCard label={t('affectedValue')} value={report.budget.affectedValue} color="bg-sage" icon={<Coins size={18} />} />
                 <SummaryCard label={t('totalPurchasesReport')} value={report.totalPurchases} color="bg-wood-warm" icon={<ShoppingCart size={18} />} />
                 <SummaryCard label={t('totalExpenses')} value={report.totalExpenses} color="bg-terracotta" icon={<Wallet size={18} />} />
                 <SummaryCard label={t('totalSalaries')} value={report.totalSalaries} color="bg-gold" icon={<HardHat size={18} />} />
-                <SummaryCard label={t('grossMargin')} value={report.grossMargin} color="bg-gradient-to-br from-sky-500 to-cyan-500" icon={<Percent size={18} />} />
                 <div className="card-wood rounded-xl bg-wood-btn p-4 text-white">
-                  <p className="text-xs opacity-90">{t('netProfit')}</p>
-                  <p className="text-mono mt-2 text-xl font-bold">{formatMoney(report.netProfit)}</p>
+                  <p className="text-xs opacity-90">{t('caisseBalance')}</p>
+                  <p className="text-mono mt-2 text-xl font-bold">{formatMoney(report.wealth.budgetBalance)}</p>
+                  <p className="mt-1 text-[11px] opacity-80">{t('inventoryValue')}: {formatMoney(report.stockValue)}</p>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="card-wood rounded-xl p-3"><p className="text-[11px] text-wood-medium">{t('unitsSold')}</p><p className="text-mono text-lg font-bold text-wood-dark">{report.unitsSold}</p></div>
-                <div className="card-wood rounded-xl p-3"><p className="text-[11px] text-wood-medium">{t('cogs')}</p><p className="text-mono text-lg font-bold text-wood-dark">{formatMoney(report.cogs)}</p></div>
-                <div className="card-wood rounded-xl p-3"><p className="text-[11px] text-wood-medium">{t('marginRate')}</p><p className="text-mono text-lg font-bold text-sage">{report.marginPct.toFixed(1)} %</p></div>
-                <div className="card-wood rounded-xl p-3"><p className="text-[11px] text-wood-medium">{t('avgBasket')}</p><p className="text-mono text-lg font-bold text-wood-dark">{formatMoney(report.periodSales.length ? report.totalSales / report.periodSales.length : 0)}</p></div>
-              </div>
-            </section>
-
-            {/* Caisse / treasury summary */}
-            <section className="card-wood rounded-xl p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><Landmark size={18} className="text-wood-warm" />{t('caisse')} — {t('financialSummary')}</h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
                 {[
-                  { l: t('cashIn'), v: report.caisse.cashIn, c: 'text-sage' },
-                  { l: t('cashOut'), v: report.caisse.cashOut, c: 'text-terracotta' },
-                  { l: t('netFlow'), v: report.caisse.netFlow, c: report.caisse.netFlow >= 0 ? 'text-sage' : 'text-terracotta' },
-                  { l: `${t('collected')} ${t('sales')}`, v: report.caisse.salesCollected, c: 'text-wood-dark' },
-                  { l: `${t('paid')} ${t('purchase')}`, v: report.caisse.purchasesPaid, c: 'text-wood-dark' },
-                  { l: t('salariesPaid'), v: report.caisse.salaries, c: 'text-wood-dark' },
+                  { l: t('units') + ' — ' + t('affectations').toLowerCase(), v: `${report.unitsAffected}` },
+                  { l: t('qtyPurchased'), v: `${report.unitsPurchased}` },
+                  { l: t('departments'), v: `${report.deps.filter((d) => d.count > 0).length} / ${departments.length}` },
+                  { l: t('products'), v: `${products.length}` },
+                  { l: t('stockAlerts'), v: `${report.lowStock.length}` },
+                  { l: t('supplierPayables'), v: formatMoney(report.wealth.supplierPayables) },
                 ].map((x) => (
-                  <div key={x.l} className="rounded-xl bg-wood-cream/40 p-3">
-                    <p className="truncate text-[11px] text-wood-medium">{x.l}</p>
-                    <p className={`text-mono text-base font-bold ${x.c}`}>{formatMoney(x.v)}</p>
-                  </div>
+                  <div key={x.l} className="card-wood rounded-xl p-3"><p className="truncate text-[11px] text-wood-medium">{x.l}</p><p className="text-mono text-lg font-bold text-wood-dark">{x.v}</p></div>
                 ))}
               </div>
             </section>
 
-            {/* Product sales analysis — fast & slow movers */}
-            <section className="card-wood rounded-xl p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><BarChart3 size={18} className="text-wood-warm" />{t('salesAnalysis')}</h2>
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-sage"><TrendingUp size={16} />{t('bestSellers')}</h3>
-                  {report.bestSellers.length > 0 && (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={report.bestSellers} layout="vertical" margin={{ left: 8, right: 16 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E4E8F1" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 10, fill: '#56627A' }} />
-                        <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 9, fill: '#56627A' }} />
-                        <Tooltip formatter={(v: number) => `${v}`} contentStyle={{ borderRadius: 12, border: '1px solid #2F5BFF40' }} />
-                        <Bar dataKey="quantity" name={t('qtySold')} fill="#2F5BFF" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                  <ReportTable
-                    head={[t('productName'), t('qtySold'), t('sales'), t('margin')]}
-                    rows={report.bestSellers.map((p) => [p.name, `${p.quantity}`, formatMoney(p.revenue), formatMoney(p.gain)])}
-                  />
-                </div>
-                <div>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-terracotta"><TrendingDown size={16} />{t('slowMovers')}</h3>
-                  <ReportTable
-                    head={[t('productName'), t('category'), t('qtySold'), t('sales')]}
-                    rows={report.slowMovers.map((p) => [p.name, p.category, `${p.quantity}`, formatMoney(p.revenue)])}
-                  />
-                  <p className="mt-2 text-xs text-wood-medium/70">{t('slowMoversHint')}</p>
-                </div>
+            {/* Budget */}
+            <Section title={`${t('budget')} — ${t('financialSummary')}`} icon={<Landmark size={18} className="text-wood-warm" />}>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+                {[
+                  { l: t('allocationsTotal'), v: report.budget.deposits, c: 'text-sage' },
+                  { l: t('withdrawalsTotal'), v: report.budget.withdrawals, c: 'text-terracotta' },
+                  { l: `${t('paid')} ${t('purchase')}`, v: report.budget.purchasesPaid, c: 'text-wood-dark' },
+                  { l: t('expenses'), v: report.budget.expenses, c: 'text-wood-dark' },
+                  { l: t('salariesPaid'), v: report.budget.salaries, c: 'text-wood-dark' },
+                  { l: t('cashIn'), v: report.budget.cashIn, c: 'text-sage' },
+                  { l: t('cashOut'), v: report.budget.cashOut, c: 'text-terracotta' },
+                  { l: t('netFlow'), v: report.budget.netFlow, c: report.budget.netFlow >= 0 ? 'text-sage' : 'text-terracotta' },
+                ].map((x) => (
+                  <div key={x.l} className="rounded-xl bg-wood-cream/40 p-3">
+                    <p className="truncate text-[11px] text-wood-medium">{x.l}</p>
+                    <p className={`text-mono text-sm font-bold ${x.c}`}>{formatMoney(x.v)}</p>
+                  </div>
+                ))}
               </div>
-            </section>
-
-            {/* Retail — containers, open bottle and portions sold */}
-            <section className="card-wood rounded-xl p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-display text-lg font-bold text-wood-dark">
-                <Beaker size={18} className="text-wood-warm" />
-                {t('retailProducts')}
-              </h2>
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 text-sm font-bold text-wood-dark">{t('stockReport')}</h3>
-                  <ReportTable
-                    head={[t('productName'), t('containers'), t('openContainer'), t('totalContent'), t('portionPrice')]}
-                    rows={report.retail.map((r) => [
-                      r.name,
-                      `${r.containers}`,
-                      `${r.open} ${r.unit}`,
-                      `${r.content} ${r.unit}`,
-                      r.portion,
-                    ])}
-                  />
-                </div>
-                <div>
-                  <h3 className="mb-2 text-sm font-bold text-wood-dark">{t('salesDetailed')}</h3>
-                  <ReportTable
-                    head={[t('reference'), t('productName'), t('quantity'), t('total')]}
-                    rows={report.retailSold.map((l) => [
-                      l.reference,
-                      l.productName,
-                      `${l.quantity} ${l.unit ?? ''}`,
-                      formatMoney(round2(l.quantity * l.unitPrice)),
-                    ])}
-                  />
-                </div>
+              <div className="mt-4">
+                <ReportTable
+                  head={[t('date'), t('type'), t('description'), t('amount')]}
+                  rows={report.periodBudget.map((x) => [
+                    format(new Date(x.date), 'dd/MM/yyyy'),
+                    x.type === 'deposit' ? t('deposit') : t('withdrawal'),
+                    x.description || '—',
+                    `${x.type === 'deposit' ? '+' : '−'} ${formatMoney(x.amount)}`,
+                  ])}
+                />
               </div>
-            </section>
+            </Section>
 
-            {/* Category analysis */}
-            <section className="card-wood rounded-xl p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><Tags size={18} className="text-wood-warm" />{t('categoryAnalysis')}</h2>
+            {/* Departments */}
+            <Section title={t('departmentAnalysis')} icon={<Building2 size={18} className="text-wood-warm" />}>
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                {report.cats.length > 0 && (
+                {report.deps.some((d) => d.value > 0) && (
                   <ResponsiveContainer width="100%" height={260}>
                     <PieChart>
-                      <Pie data={report.cats} dataKey="salesRevenue" nameKey="category" cx="50%" cy="50%" outerRadius={90} label={(e) => e.category}>
-                        {report.cats.map((_, i) => (
+                      <Pie data={report.deps.filter((d) => d.value > 0)} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={(e) => e.name}>
+                        {report.deps.map((_, i) => (
                           <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(v: number) => formatMoney(v)} contentStyle={{ borderRadius: 12, border: '1px solid #2F5BFF40' }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
                 <ReportTable
-                  head={[t('category'), t('sales'), t('purchase'), t('netProfit')]}
-                  rows={report.cats.map((c) => [c.category, formatMoney(c.salesRevenue), formatMoney(c.purchasesCost), formatMoney(c.gain)])}
+                  head={[t('department'), t('affectations'), t('units'), t('value'), t('lastAffectation')]}
+                  rows={report.deps.map((d) => [d.name, `${d.count}`, `${d.quantity}`, formatMoney(d.value), d.lastDate ? format(new Date(d.lastDate), 'dd/MM/yyyy') : '—'])}
                 />
               </div>
-            </section>
+            </Section>
 
-            {/* Sales detail */}
-            <section className="card-wood rounded-xl p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><TrendingUp size={18} className="text-sage" />{t('salesDetailed')}</h2>
-              {report.topProducts.length > 0 && (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={report.topProducts}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E4E8F1" />
-                    <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#56627A' }} interval={0} angle={-15} textAnchor="end" height={60} />
-                    <YAxis tick={{ fontSize: 11, fill: '#56627A' }} />
-                    <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #2F5BFF40' }} />
-                    <Bar dataKey="quantity" name={t('quantity')} fill="#2F5BFF" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+            {/* Movement analysis — most affected / dormant */}
+            <Section title={t('movementAnalysis')} icon={<BarChart3 size={18} className="text-wood-warm" />}>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-sage"><TrendingUp size={16} />{t('mostAffected')}</h3>
+                  {report.mostAffected.length > 0 && (
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart data={report.mostAffected} layout="vertical" margin={{ left: 8, right: 16 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E4E8F1" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: '#56627A' }} />
+                        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 9, fill: '#56627A' }} />
+                        <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #2F5BFF40' }} />
+                        <Bar dataKey="quantity" name={t('affectedQty')} fill="#2F5BFF" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                  <ReportTable
+                    head={[t('productName'), t('affectedQty'), t('departments'), t('value')]}
+                    rows={report.mostAffected.map((p) => [p.name, `${p.quantity}`, `${p.departments}`, formatMoney(p.value)])}
+                  />
+                </div>
+                <div>
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-terracotta"><TrendingDown size={16} />{t('dormantStock')}</h3>
+                  <ReportTable
+                    head={[t('productName'), t('category'), t('affectedQty'), t('inStock')]}
+                    rows={report.dormant.map((p) => [p.name, p.category, `${p.quantity}`, `${products.find((x) => x.id === p.productId)?.quantity ?? 0}`])}
+                  />
+                  <p className="mt-2 text-xs text-wood-medium/70">{t('dormantStockHint')}</p>
+                </div>
+              </div>
+            </Section>
+
+            {/* Category analysis */}
+            <Section title={t('categoryAnalysis')} icon={<Tags size={18} className="text-wood-warm" />}>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {report.cats.some((c) => c.stockValue > 0) && (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={report.cats}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E4E8F1" />
+                      <XAxis dataKey="category" tick={{ fontSize: 9, fill: '#56627A' }} interval={0} angle={-15} textAnchor="end" height={60} />
+                      <YAxis tick={{ fontSize: 10, fill: '#56627A' }} tickFormatter={(v) => `${v / 1000}k`} />
+                      <Tooltip formatter={(v: number) => formatMoney(v)} contentStyle={{ borderRadius: 12, border: '1px solid #2F5BFF40' }} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="purchasesCost" name={t('purchase')} fill="#00B8D9" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="affectedValue" name={t('affectations')} fill="#2F5BFF" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="stockValue" name={t('stockValue')} fill="#12B76A" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+                <ReportTable
+                  head={[t('category'), t('qtyPurchased'), t('purchase'), t('affectedQty'), t('affectedValue'), t('stockValue')]}
+                  rows={report.cats.map((c) => [c.category, `${c.qtyPurchased}`, formatMoney(c.purchasesCost), `${c.qtyAffected}`, formatMoney(c.affectedValue), formatMoney(c.stockValue)])}
+                />
+              </div>
+            </Section>
+
+            {/* Affectations detail */}
+            <Section
+              title={t('affectationsDetailed')}
+              icon={<ClipboardList size={18} className="text-sage" />}
+              extra={<Badge tone="info">{report.periodAffectations.length} · {formatMoney(report.budget.affectedValue)}</Badge>}
+            >
               <ReportTable
-                head={[t('reference'), t('client'), t('date'), t('total'), t('status')]}
-                rows={report.periodSales.map((s) => [s.reference, s.clientName, format(new Date(s.date), 'dd/MM/yyyy'), formatMoney(s.total), s.paid >= s.total ? t('statusPaid') : t('inDebt')])}
+                head={[t('reference'), t('date'), t('department'), t('items'), t('units'), t('value')]}
+                rows={report.periodAffectations.map((a) => [
+                  a.reference,
+                  format(new Date(a.date), 'dd/MM/yyyy'),
+                  a.departmentName,
+                  a.lines.map((l) => `${l.productName} ×${l.quantity}`).join(', '),
+                  `${a.lines.reduce((s, l) => s + l.quantity, 0)}`,
+                  formatMoney(a.total),
+                ])}
               />
-            </section>
-
-            {/* Top clients */}
-            <section className="card-wood rounded-xl p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><Users size={18} className="text-wood-warm" />{t('topClients')}</h2>
-              <ReportTable head={['#', t('client'), t('amount')]} rows={report.topClients.map((c, i) => [`${i + 1}`, c.name, formatMoney(c.amount)])} />
-            </section>
+              <h3 className="mb-2 mt-5 text-sm font-bold text-wood-dark">{t('affectationsOut')} — {t('products').toLowerCase()}</h3>
+              <ReportTable
+                head={[t('productName'), t('category'), t('affectations'), t('affectedQty'), t('value')]}
+                rows={report.affected.map((r) => [r.name, r.category, `${r.count}`, `${r.quantity}`, formatMoney(r.value)])}
+              />
+            </Section>
 
             {/* Purchases detail */}
-            <section className="card-wood rounded-xl p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><ShoppingCart size={18} className="text-wood-medium" />{t('purchasesDetailed')}</h2>
+            <Section title={t('purchasesDetailed')} icon={<ShoppingCart size={18} className="text-wood-medium" />}>
               <ReportTable
                 head={[t('reference'), t('supplier'), t('date'), t('total'), t('paid'), t('remaining')]}
                 rows={report.periodPurchases.map((p) => [p.reference, p.supplierName, format(new Date(p.date), 'dd/MM/yyyy'), formatMoney(p.total), formatMoney(p.paid), formatMoney(remaining(p.total, p.paid))])}
               />
-            </section>
+              <h3 className="mb-2 mt-5 text-sm font-bold text-wood-dark">{t('productsPurchased')}</h3>
+              <ReportTable
+                head={[t('productName'), t('category'), t('qtyPurchased'), t('total')]}
+                rows={report.purchased.map((r) => [r.name, r.category, `${r.quantity}`, formatMoney(r.total)])}
+              />
+            </Section>
 
-            {/* Debts */}
+            {/* Suppliers debts + expenses */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <section className="card-wood rounded-xl p-5">
-                <h2 className="mb-3 text-display text-lg font-bold text-wood-dark">{t('clientDebts')}</h2>
-                <ReportTable head={[t('client'), t('totalDebt')]} rows={report.clientDebts.map((c) => [c.name, formatMoney(c.totalDebt)])} />
-              </section>
-              <section className="card-wood rounded-xl p-5">
-                <h2 className="mb-3 text-display text-lg font-bold text-wood-dark">{t('supplierDebts')}</h2>
-                <ReportTable head={[t('supplier'), t('totalDebt')]} rows={report.supplierDebts.map((s) => [s.name, formatMoney(s.totalDebt)])} />
-              </section>
+              <Section title={t('supplierDebts')} icon={<Truck size={18} className="text-wood-warm" />}>
+                <ReportTable head={[t('supplier'), t('total'), t('paid'), t('totalDebt')]} rows={report.supplierDebts.map((s) => [s.name, formatMoney(s.totalAmount), formatMoney(s.totalPaid), formatMoney(s.totalDebt)])} />
+              </Section>
+              <Section title={t('expenses')} icon={<Wallet size={18} className="text-terracotta" />} extra={<b className="text-mono text-terracotta">{formatMoney(report.totalExpenses)}</b>}>
+                <ReportTable head={[t('name'), t('date'), t('description'), t('amount')]} rows={report.periodExpenses.map((e) => [e.name, format(new Date(e.date), 'dd/MM/yyyy'), e.description || '—', formatMoney(e.amount)])} />
+              </Section>
             </div>
 
-            {/* Expenses + salaries */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <section className="card-wood rounded-xl p-5">
-                <h2 className="mb-3 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><Wallet size={18} className="text-terracotta" />{t('expenses')}</h2>
-                <ReportTable head={[t('name'), t('date'), t('amount')]} rows={report.periodExpenses.map((e) => [e.name, format(new Date(e.date), 'dd/MM/yyyy'), formatMoney(e.amount)])} />
-              </section>
-              <section className="card-wood rounded-xl p-5">
-                <h2 className="mb-3 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><HardHat size={18} className="text-gold" />{t('totalSalaries')}</h2>
-                <ReportTable head={[t('workers'), t('period'), t('amount')]} rows={report.salaryPayments.map((p) => [p.worker, p.period, formatMoney(p.amount)])} />
-              </section>
-            </div>
+            {/* Workers */}
+            <Section title={t('workersMovements')} icon={<HardHat size={18} className="text-gold" />}>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 text-sm font-bold text-wood-dark">{t('salariesPaid')} — {formatMoney(report.workerMov.totalPayments)}</h3>
+                  <ReportTable head={[t('workers'), t('date'), t('description'), t('amount')]} rows={report.workerMov.payments.map((p) => [p.workerName, format(new Date(p.date), 'dd/MM/yyyy'), p.description, formatMoney(p.amount)])} />
+                </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-bold text-wood-dark">{t('advances')} — {formatMoney(report.workerMov.totalAdvances)}</h3>
+                  <ReportTable head={[t('workers'), t('date'), t('description'), t('amount')]} rows={report.workerMov.advances.map((p) => [p.workerName, format(new Date(p.date), 'dd/MM/yyyy'), p.description, formatMoney(p.amount)])} />
+                  <h3 className="mb-2 mt-4 text-sm font-bold text-wood-dark">{t('absences')} — {formatMoney(report.workerMov.totalAbsences)}</h3>
+                  <ReportTable head={[t('workers'), t('date'), t('description'), t('amount')]} rows={report.workerMov.absences.map((p) => [p.workerName, format(new Date(p.date), 'dd/MM/yyyy'), p.description, formatMoney(p.amount)])} />
+                </div>
+              </div>
+            </Section>
 
-            {/* Stock */}
-            <section className="card-wood rounded-xl p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-display text-lg font-bold text-wood-dark"><Boxes size={18} className="text-wood-warm" />{t('stockReport')} — {t('stockAlerts')}</h2>
-              {report.lowStock.length === 0 ? (
-                <div className="py-4 text-center"><Badge tone="paid">{t('inStock')}</Badge></div>
-              ) : (
-                <ReportTable head={[t('productName'), t('quantity'), t('minQuantity')]} rows={report.lowStock.map((p) => [p.name, `${p.quantity}`, `${p.minQuantity}`])} />
-              )}
-            </section>
+            {/* Stock situation */}
+            <Section
+              title={t('stockSituation')}
+              icon={<Boxes size={18} className="text-wood-warm" />}
+              extra={<Badge tone="gold">{t('inventoryValue')}: {formatMoney(report.stockValue)}</Badge>}
+            >
+              <ReportTable
+                head={[t('productName'), t('category'), t('quantity'), t('minQuantity'), t('purchasePrice'), t('value'), t('status'), t('expirationDate')]}
+                rows={report.stockRows.map((p) => [p.name, p.category, `${p.quantity}`, `${p.minQuantity}`, formatMoney(p.purchasePrice), formatMoney(p.value), p.status, p.expiry])}
+              />
+            </Section>
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <Section title={t('stockAlerts')} icon={<Package size={18} className="text-terracotta" />}>
+                {report.lowStock.length === 0 ? (
+                  <div className="py-4 text-center"><Badge tone="paid">{t('inStock')}</Badge></div>
+                ) : (
+                  <ReportTable head={[t('productName'), t('quantity'), t('minQuantity')]} rows={report.lowStock.map((p) => [p.name, `${p.quantity}`, `${p.minQuantity}`])} />
+                )}
+              </Section>
+              <Section title={t('expiredProducts')} icon={<CalendarX size={18} className="text-terracotta" />}>
+                <ReportTable head={[t('productName'), t('quantity'), t('expirationDate')]} rows={report.expired.map((p) => [p.name, `${p.quantity}`, format(new Date(p.expirationDate!), 'dd/MM/yyyy')])} />
+              </Section>
+            </div>
           </motion.div>
         ) : (
           <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="card-wood flex flex-col items-center gap-3 rounded-xl py-20 text-center">
@@ -430,13 +459,14 @@ export const ReportsPage = () => {
 const ReportTable = ({ head, rows }: { head: string[]; rows: string[][] }) => {
   const { t } = useTranslation()
   if (rows.length === 0) return <p className="py-4 text-center text-sm text-wood-medium">{t('noData')}</p>
+  const numeric = (s: string) => /^[+−-]?\s?[\d\s.,]+(\s?DA)?$/.test(s.trim())
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b-2 border-wood-light/40 text-start text-xs uppercase text-wood-medium">
+          <tr className="border-b-2 border-wood-light/40 text-xs uppercase text-wood-medium">
             {head.map((h, i) => (
-              <th key={i} className={`py-2 ${i === 0 ? 'text-start' : i >= 3 ? 'text-end' : 'text-start'}`}>{h}</th>
+              <th key={i} className={`whitespace-nowrap px-2 py-2 ${i === 0 ? 'text-start' : rows[0] && numeric(rows[0][i] ?? '') ? 'text-end' : 'text-start'}`}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -444,7 +474,7 @@ const ReportTable = ({ head, rows }: { head: string[]; rows: string[][] }) => {
           {rows.map((row, i) => (
             <tr key={i} className="border-b border-wood-cream">
               {row.map((cell, j) => (
-                <td key={j} className={`py-2 ${j === 0 ? 'font-medium text-wood-dark' : j >= 3 ? 'text-mono text-end' : 'text-wood-medium'}`}>{cell}</td>
+                <td key={j} className={`px-2 py-2 ${j === 0 ? 'font-medium text-wood-dark' : numeric(cell) ? 'text-mono whitespace-nowrap text-end' : 'text-wood-medium'}`}>{cell}</td>
               ))}
             </tr>
           ))}

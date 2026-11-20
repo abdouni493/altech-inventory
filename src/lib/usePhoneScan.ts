@@ -50,7 +50,7 @@ export const usePhoneScan = (onBarcode: (barcode: string) => void): PhoneScanSta
     setStatus('starting')
     setError('')
     try {
-      const created = await openScanSession('POS')
+      const created = await openScanSession('Affectation')
       sessionRef.current = created
       setSession(created)
       setStatus('waiting')

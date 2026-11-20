@@ -1,9 +1,30 @@
-# Altech POS — Caisse & gestion de boutique, 100 % hors ligne
+# Altech Inventory — Gestion de stock & affectations (organismes publics), 100 % hors ligne
 
-Application de caisse et de gestion de boutique (stock, achats, ventes, clients,
-fournisseurs, employés, dépenses, caisse, rapports) en **React 18 + TypeScript + Vite**.
-Elle fonctionne **sans internet** : toutes les données sont enregistrées sur le PC, dans le dossier
-`data\`. Interface bilingue **Français / Arabe (RTL)**, utilisable au clavier, sur PC et sur mobile.
+**Version démo.** Application de gestion du magasin d'un organisme public : stock, achats, fournisseurs,
+**départements**, **affectations** du matériel aux départements, employés, dépenses, **budget** et rapports,
+en **React 18 + TypeScript + Vite**. Elle fonctionne **sans internet** : toutes les données sont enregistrées sur le PC,
+dans le dossier `data\` (ou dans le navigateur — IndexedDB — si l'application est hébergée sans le serveur local).
+Interface bilingue **Français / Arabe (RTL)**, utilisable sur PC et sur mobile.
+
+## Version démo
+
+- L'écran de connexion propose **« Connexion avec le compte démo »** : un clic ouvre l'application avec un jeu
+  de données de test complet (produits, achats, fournisseurs, départements, affectations, employés, dépenses, budget).
+- Identifiants démo : **demo@altech.dz** / **demo1234** (ou le nom d'utilisateur `demo`).
+- Une base vide est remplie automatiquement avec les données de démonstration au premier lancement.
+- **Paramètres → Base de données → Recharger les données de démonstration** remet le jeu de test à zéro.
+
+## Modules
+
+| Module | Rôle |
+|---|---|
+| Tableau de bord | affectations du mois, valeur du stock, départements servis, flux mensuels, alertes |
+| Affectations | sortie de matériel vers un département — recherche produit, saisie / douchette ou **scan du code-barres au téléphone**, historique complet, détails (avec chronologie et impression du bon), modification, suppression |
+| Gestion de stock | produits + bouton **Historique** de chaque produit (achats reçus et affectations) |
+| Achats / Fournisseurs | entrées en stock, paiements et dettes fournisseurs |
+| Départements | nom, description et informations optionnelles (code, responsable, téléphone, email, emplacement) — détails, modification, suppression |
+| Budget | dotations, retraits, achats payés, dépenses, salaires, consommation du budget, analyse par catégorie et par département |
+| Rapports | budget, départements, articles les plus affectés / stock dormant, catégories, affectations, achats, dépenses, salaires, situation du stock |
 
 ## Installation sur un PC client (Windows)
 
@@ -12,8 +33,8 @@ Prérequis : **Node.js LTS** (https://nodejs.org), à installer une seule fois.
 1. Copiez tout le dossier de l'application sur le PC (par ex. `C:\AltechPOS`).
 2. Double-cliquez sur **`create-desktop-shortcut.bat`** :
    - installe les dépendances et prépare l'application (première fois : quelques minutes) ;
-   - crée le raccourci **« Altech POS »** sur le bureau et dans le menu Démarrer, avec l'icône Altech POS.
-3. Double-cliquez sur **Altech POS** sur le bureau : le serveur local démarre en arrière-plan et
+   - crée le raccourci **« Altech Inventory »** sur le bureau et dans le menu Démarrer, avec l'icône Altech Inventory.
+3. Double-cliquez sur **Altech Inventory** sur le bureau : le serveur local démarre en arrière-plan et
    l'application s'ouvre dans **sa propre fenêtre, sans cadre de navigateur** (Edge ou Chrome en mode
    application ; à défaut, le navigateur par défaut).
 
@@ -51,45 +72,11 @@ Les mots de passe ne sont jamais stockés : seule une empreinte salée (SHA-256 
 - La base n'est accessible que depuis ce PC. Pour partager la même base entre plusieurs caisses du
   réseau local, démarrez le serveur avec `ALTECH_LAN_DB=1` et ouvrez `http://<IP-du-PC>:5175` sur les autres postes.
 
-## Vente en détail (boîte / pièce)
-
-Un produit peut être vendu **à la boîte** et **à la pièce** — ex. un paquet de 20 cigarettes, un flacon
-de parfum de 100 ml vendu par 10 ml.
-
-1. **Stock → Nouveau produit** : choisissez (ou créez sur place avec **+**) l'**unité** du produit
-   (paquet, boîte, flacon…), activez **Vente en détail**, choisissez l'**unité de détail** (pièce,
-   cigarette, ml…), le **nombre de pièces dans une boîte** et le **prix de vente d'une pièce**. Le stock
-   initial se saisit en « 12 paquets + 7 cigarettes ». Optionnel : portion par défaut et code-barres
-   de la pièce. Les prix d'achat / de vente de la boîte arrivent avec le premier achat.
-2. **Caisse** : toucher (ou scanner) le produit ouvre la fenêtre **« Vendre en paquet / Au détail »**
-   (touches **B** / **D**), avec quantité (**↑ ↓**), raccourcis de quantité, prix en direct et
-   l'état du rayon **avant → après** la vente. Scanner le code-barres d'une pièce l'ajoute directement.
-3. **Stock** : chaque carte affiche les **boîtes scellées**, les **pièces restantes dans la boîte
-   entamée** (avec jauge) et le total ; le bouton **« Ouvrir 1 paquet »** entame une boîte.
-4. Le stock diminue automatiquement à chaque vente : les pièces sont prises d'abord dans la boîte
-   entamée, puis une nouvelle boîte est ouverte. Supprimer une vente remet tout en stock.
-
-## Raccourcis clavier (F1 dans l'application)
-
-| Touche | Action |
-|---|---|
-| `Alt+1…8`, `Alt+E/C/R/P` | ouvrir un module (tableau de bord, caisse, stock, achats…) |
-| `Alt+M` | menu complet |
-| `F2` | recherche / scanner de la caisse |
-| `3*code` puis Entrée | ajouter 3 articles d'un coup |
-| `F4` / `F6` / `F7` | client / remise / montant reçu |
-| `F8` | mettre la vente **en attente** (rappel via « En attente ») |
-| `F9` ou `Ctrl+Entrée` | valider la vente |
-| `+` / `−` / `Suppr` | quantité / suppression de la dernière ligne |
-| `Ctrl+Entrée` | enregistrer la fiche produit |
-
 ## Scanner avec le téléphone
 
-Dans la caisse, **« Scanner avec mon téléphone »** affiche un QR code. Le téléphone (sur le même
-Wi-Fi) l'ouvre et chaque code-barres filmé arrive dans le panier, relayé par le serveur local — sans
-internet. L'adresse réseau du PC est détectée automatiquement (Paramètres → Base de données).
-Les navigateurs mobiles n'autorisent la caméra que sur une page sécurisée : si la caméra du téléphone
-est refusée, utilisez la saisie manuelle de la page de scan, la caméra du PC ou une douchette USB.
+Dans **Affectations → Nouvelle affectation**, le bouton **« Scanner avec mon téléphone »** affiche un QR code.
+Le téléphone (sur le même Wi-Fi) l'ouvre et chaque code-barres filmé est ajouté à l'affectation, relayé par le
+serveur local. La caméra de l'appareil lui-même et les douchettes USB fonctionnent aussi.
 
 ## Développement
 

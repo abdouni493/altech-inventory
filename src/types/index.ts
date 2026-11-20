@@ -1,5 +1,5 @@
 // ============================================================================
-// Altech POS — Core domain types
+// Altech Inventory — Core domain types
 // ============================================================================
 
 export type Lang = 'fr' | 'ar'
@@ -43,14 +43,12 @@ export type ModuleKey =
   | 'dashboard'
   | 'stock'
   | 'purchase'
-  | 'production'
-  | 'pos'
-  | 'sales'
-  | 'clients'
+  | 'departments'
+  | 'affectations'
   | 'suppliers'
   | 'workers'
   | 'expenses'
-  | 'caisse'
+  | 'budget'
   | 'reports'
   | 'settings'
 
@@ -146,121 +144,6 @@ export interface Purchase {
 }
 
 // ----------------------------------------------------------------------------
-// Sales
-// ----------------------------------------------------------------------------
-
-/**
- * `product`    — a whole unit taken from the stock.
- * `retail`     — a fraction of a divisible product; `quantity` is expressed in
- *                `unit` (ml, g…) and `unitPrice` is the price of ONE `unit`.
- * `production` — a finished item coming out of a production batch.
- */
-export type SaleLineKind = 'product' | 'retail' | 'production'
-
-export interface SaleLine {
-  productId: string
-  productName: string
-  barcode: string
-  quantity: number
-  unitPrice: number
-  kind?: SaleLineKind
-  /** Measure unit of `quantity` for retail lines. */
-  unit?: string
-  /** Cost of one `quantity` step, captured at sale time (exact margins). */
-  unitCost?: number
-  /** Batch this line was served from, for `production` lines. */
-  productionId?: string
-}
-
-export interface Sale {
-  id: string
-  reference: string
-  clientId: string | null
-  clientName: string
-  lines: SaleLine[]
-  subtotal: number
-  discount: number
-  total: number
-  paid: number
-  payments: Payment[]
-  date: string
-  createdAt: string
-}
-
-// ----------------------------------------------------------------------------
-// Production — technical sheets (recipes) & manufactured batches
-// ----------------------------------------------------------------------------
-
-/** One ingredient of a recipe: a stock product and the quantity it consumes. */
-export interface RecipeLine {
-  productId: string
-  productName: string
-  /**
-   * Quantity consumed per batch. Whole units for a normal product, content
-   * (ml, g…) when the product is divisible and `byContent` is true.
-   */
-  quantity: number
-  /** Cost of ONE `quantity` step (one unit, or one ml for content lines). */
-  unitCost: number
-  /** True when the recipe eats the CONTENT of a divisible product. */
-  byContent?: boolean
-  /** Measure unit shown next to the quantity for content lines. */
-  unit?: string
-}
-
-/**
- * A "fiche technique": the recipe of a finished article. Creating one never
- * touches the stock — it only describes what a batch would consume and yield.
- */
-export interface TechSheet {
-  id: string
-  name: string
-  description: string
-  /** Name of the article produced (defaults to the sheet name). */
-  outputName: string
-  /** How many finished units one batch yields. */
-  outputQuantity: number
-  /** Sale price of one finished unit. */
-  outputUnitPrice: number
-  lines: RecipeLine[]
-  createdAt: string
-}
-
-export type ProductionStatus = 'active' | 'recovered'
-
-/** A batch actually manufactured — this one DOES consume the stock. */
-export interface Production {
-  id: string
-  reference: string
-  sheetId: string | null
-  sheetName: string
-  outputName: string
-  outputQuantity: number
-  outputUnitPrice: number
-  lines: RecipeLine[]
-  totalCost: number
-  totalRevenue: number
-  gain: number
-  /** Finished units already sold at the POS. */
-  soldQuantity: number
-  /** `recovered` = the components were given back to the stock. */
-  status: ProductionStatus
-  date: string
-  createdAt: string
-}
-
-// ----------------------------------------------------------------------------
-// Clients
-// ----------------------------------------------------------------------------
-
-export interface Client {
-  id: string
-  name: string
-  phone: string
-  createdAt: string
-}
-
-// ----------------------------------------------------------------------------
 // Suppliers
 // ----------------------------------------------------------------------------
 
@@ -341,18 +224,71 @@ export interface Expense {
 }
 
 // ----------------------------------------------------------------------------
-// Caisse (Treasury / Cash register)
+// Budget (allocations / withdrawals)
 // ----------------------------------------------------------------------------
 
 export type CaisseType = 'deposit' | 'withdrawal'
 
-/** A manual cash movement registered directly in the Caisse. */
+/** A manual budget movement: an allocation received (deposit) or a withdrawal. */
 export interface CaisseTransaction {
   id: string
   type: CaisseType
   amount: number
   description: string
   date: string
+  createdAt: string
+}
+
+// ----------------------------------------------------------------------------
+// Departments & affectations (assignment of stock to a department)
+// ----------------------------------------------------------------------------
+
+export interface Department {
+  id: string
+  name: string
+  description: string
+  /** Optional details. */
+  code?: string
+  manager?: string
+  phone?: string
+  email?: string
+  location?: string
+  createdAt: string
+}
+
+export interface AffectationLine {
+  productId: string
+  productName: string
+  barcode: string
+  quantity: number
+  /** Purchase cost of one unit at the time of the affectation. */
+  unitCost: number
+}
+
+export type AffectationEventType = 'created' | 'updated'
+
+/** One entry of the audit trail of an affectation. */
+export interface AffectationEvent {
+  id: string
+  type: AffectationEventType
+  date: string
+  by: string
+  note: string
+}
+
+export interface Affectation {
+  id: string
+  reference: string
+  departmentId: string
+  departmentName: string
+  lines: AffectationLine[]
+  description: string
+  /** Person of the department who received the items. */
+  receivedBy?: string
+  total: number
+  date: string
+  history: AffectationEvent[]
+  createdBy?: string
   createdAt: string
 }
 

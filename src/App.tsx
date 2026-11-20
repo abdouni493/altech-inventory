@@ -9,13 +9,12 @@ import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { StockPage } from '@/pages/Stock/StockPage'
 import { PurchasePage } from '@/pages/Purchase/PurchasePage'
-import { POSPage } from '@/pages/POS/POSPage'
-import { SalesPage } from '@/pages/Sales/SalesPage'
-import { ClientsPage } from '@/pages/Clients/ClientsPage'
+import { DepartmentsPage } from '@/pages/Departments/DepartmentsPage'
+import { AffectationsPage } from '@/pages/Affectations/AffectationsPage'
 import { SuppliersPage } from '@/pages/Suppliers/SuppliersPage'
 import { WorkersPage } from '@/pages/Workers/WorkersPage'
 import { ExpensesPage } from '@/pages/Expenses/ExpensesPage'
-import { CaissePage } from '@/pages/Caisse/CaissePage'
+import { BudgetPage } from '@/pages/Budget/BudgetPage'
 import { ReportsPage } from '@/pages/Reports/ReportsPage'
 import { SettingsPage } from '@/pages/Settings/SettingsPage'
 import { ScanPage } from '@/pages/Scan/ScanPage'
@@ -33,7 +32,7 @@ const Splash = () => {
     <div className="wood-grain flex min-h-screen flex-col items-center justify-center gap-5 bg-wood-sidebar">
       <BrandMark size={84} className="animate-bloom" />
       <div className="text-center">
-        <p className="text-display text-2xl font-bold text-white">Altech POS</p>
+        <p className="text-display text-2xl font-bold text-white">Altech Inventory</p>
         <p className="mt-2 flex items-center justify-center gap-2 text-sm font-medium text-white/70">
           <Loader2 size={15} className="animate-spin" />
           {t('openingDatabase')}
@@ -96,7 +95,7 @@ export default function App() {
         }}
       />
       <Routes>
-        {/* Phone barcode scanner — no login, paired by the QR code shown on the POS */}
+        {/* Phone barcode scanner — no login, paired by the QR code shown on the affectation screen */}
         <Route path="/scan/:sessionId" element={<ScanPage />} />
 
         {!ready ? (
@@ -111,13 +110,12 @@ export default function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/stock" element={<StockPage />} />
                 <Route path="/purchase" element={<PurchasePage />} />
-                <Route path="/pos" element={<POSPage />} />
-                <Route path="/sales" element={<SalesPage />} />
-                <Route path="/clients" element={<ClientsPage />} />
+                <Route path="/affectations" element={<AffectationsPage />} />
+                <Route path="/departments" element={<DepartmentsPage />} />
                 <Route path="/suppliers" element={<SuppliersPage />} />
                 <Route path="/workers" element={<WorkersPage />} />
                 <Route path="/expenses" element={<ExpensesPage />} />
-                <Route path="/caisse" element={<CaissePage />} />
+                <Route path="/budget" element={<BudgetPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
